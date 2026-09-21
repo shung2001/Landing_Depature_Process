@@ -1,0 +1,11 @@
+# 일반 Python용. pip install gdal은 필요하지 않다.
+# Windows에서 C/C++ 소스 빌드를 시도하지 않고 미리 빌드된 wheel만 설치한다.
+--only-binary=:all:
+numpy>=1.24
+pandas>=2.0
+geopandas>=1.0
+shapely>=2.0
+pyproj>=3.6
+pyogrio>=0.9
+# 권장 DEM backend. 없어도 QGIS/OSGeo4W의 GDAL 실행 파일을 자동 탐색한다.
+rasterio>=1.4
