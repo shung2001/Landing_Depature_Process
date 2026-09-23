@@ -95,7 +95,7 @@ class ScriptConfig:
     include_end_angle: bool = False
     triangle_height_m: float = 1_000.0
     base_width_m: float = 573.0
-    ols_slope_deg: float = 12.5
+    ols_slope_deg: float = 8.0
     dem_band: int = 1
 
 
@@ -118,7 +118,7 @@ SCRIPT_CONFIG = ScriptConfig(
     include_end_angle=False,
     triangle_height_m=1_000.0,
     base_width_m=573.0,
-    ols_slope_deg=12.5,
+    ols_slope_deg=8.0,
     dem_band=1,
 )
 # ===================================================================
