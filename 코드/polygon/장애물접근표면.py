@@ -1604,6 +1604,8 @@ def _build_parser() -> argparse.ArgumentParser:
     ``argparse``는 문자열로 들어온 옵션을 ``Path``/``float``/``int`` 등 지정한
     자료형으로 변환한다. 옵션을 생략하면 ``SCRIPT_CONFIG``의 값이 사용된다.
     이 함수는 옵션을 '정의'만 하고, 실제 해석은 ``main``의 ``parse_args``가 한다.
+    parser는 원하는 변수를 터미널에서 입력하는 방식으로 input과는 조금 다르다.
+    만일 방위각을 하나만 설정하길 희망한다면, python  코드\polygon\장애물접근표면.py --start-angle 0의 형태로 진행하면 됨.
     """
 
     parser = argparse.ArgumentParser(

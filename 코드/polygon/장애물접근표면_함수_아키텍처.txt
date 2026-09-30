@@ -1,0 +1,509 @@
+장애물접근표면.py 함수 아키텍처
+================================
+
+1. 문서 목적
+------------
+이 문서는 "코드가 어느 함수에서 시작해 어떤 데이터를 거쳐 결과 파일을 만드는가"를
+한눈에 이해하기 위한 안내서이다. Python 문법을 조금 익힌 사람이 함수 사이의 관계를
+따라갈 수 있도록 입력, 출력, 내부 호출, 실패 조건을 함수별로 정리했다.
+
+
+2. 전체 처리 흐름
+-----------------
+
+  터미널에서 Python 파일 실행
+              |
+              v
+           main()
+              |
+              +-- _build_parser()
+              |      명령행 옵션 정의
+              |
+              +-- load_source_layers()
+              |      건물/헬리포트 Shapefile 읽기 + 기본 검증
+              |
+              +-- prepare_helipad_records()
+              |      id/좌표/AGL 검증 + peer AGL 보완 + host 건물 연결
+              |         +-- _identifier_text()
+              |         +-- _safe_folder_name()
+              |
+              +-- rotation_angles()
+              |      예: (0, 1, 2, ..., 359)
+              |
+              +-- generate_all_helipad_outputs()
+              |         |
+              |         +-- sample_dem_at_reference_point()
+              |         |      헬리포트 기준점 지표고 읽기
+              |         |
+              |         +-- prepare_collision_layers()
+              |         |         +-- _sample_dem_at_geometry_points()
+              |         |         건물/헬리포트 도형과 상단고 미리 준비
+              |         |
+              |         +-- create_rotated_ols_triangles()
+              |         |         +-- create_ols_triangle()
+              |         |                   +-- _validate_parameters()
+              |         |         방위각별 삼각형 OLS 후보 생성
+              |         |
+              |         +-- validate_candidate_triangles()
+              |         |         +-- _obstacle_penetrates_triangle()
+              |         |         안전 후보와 충돌각 분리
+              |         |
+              |         +-- assert_shapefile_unlocked()
+              |         |         기존 결과 파일 잠금 사전 확인
+              |         |
+              |         +-- save_shapefile()
+              |         |         +-- _triangle_record()
+              |         |         안전 후보만 최종 파일로 저장
+              |         |
+              |         +-- remove_generated_shapefile()
+              |         |         안전 후보가 없으면 과거 결과 제거
+              |         |
+              |         +-- format_angle_ranges()
+              |                   충돌각을 CSV 표시용 범위로 압축
+              |
+              +-- _format_batch_summary()
+                     터미널에 최종 처리 통계 출력
+
+
+3. 데이터가 바뀌는 과정
+-----------------------
+
+[입력 파일]
+  건물 Shapefile + 헬리포트 Shapefile + DEM
+         |
+         v
+[GeoDataFrame]
+  좌표계가 EPSG:4326으로 통일된 공간 표
+         |
+         v
+[HelipadRecord]
+  헬리포트 한 개의 검증된 id/좌표/AGL/host 정보
+         |
+         +----------------------------+
+         |                            |
+         v                            v
+[DemSample]                     [CollisionLayers]
+  기준점 지표고                   투영된 장애물 도형 + 상단 절대고
+         |                            |
+         +-------------+--------------+
+                       v
+                 [OLSTriangle]
+             회전각별 3차원 삼각형 후보
+                       |
+                       v
+              [안전 후보 / 충돌각]
+                       |
+                       +-- 안전 후보 --> Shapefile
+                       |
+                       +-- 전체 요약 --> generation_summary.csv
+
+
+4. 높이와 좌표를 이해하는 핵심 식
+----------------------------------
+
+  헬리포트 꼭짓점 절대고 = 기준점 DEM 지표고 + 헬리포트 AGL
+
+  OLS 수직 상승량 = 수평 중심선 길이 x tan(경사각)
+
+  OLS 밑변 절대고 = 헬리포트 꼭짓점 절대고 + OLS 수직 상승량
+
+  장애물 상단 절대고 = 장애물 위치 DEM 지표고 + 장애물 AGL
+
+  진행거리 d에서의 OLS 높이
+      = 꼭짓점 절대고 + d x (수직 상승량 / 수평 중심선 길이)
+
+  충돌 조건
+      = 수평 footprint가 겹치고,
+        장애물 상단 절대고 >= 겹친 곳의 OLS 높이
+
+주의: EPSG:4326은 수평 위치의 좌표계이다. Polygon Z에 들어가는 높이는 이 코드가
+DEM과 AGL로 계산한 값이며, EPSG:4326 타원체고라는 뜻은 아니다.
+
+
+5. 데이터 클래스와 그 안의 def
+-------------------------------
+
+5.1 ScriptConfig
+  역할:
+    파일 경로, 필드명, 회전 범위, 삼각형 크기 등 기본 설정을 한 객체로 묶는다.
+  특징:
+    frozen=True이므로 생성 후 값을 바꿀 수 없다.
+
+5.2 Vertex
+  역할:
+    꼭짓점 한 개의 이름, 위도, 경도, 절대고를 보관한다.
+
+  xyz_coordinate(self)
+    입력: 현재 Vertex 객체(self)
+    출력: (경도, 위도, 높이) 튜플
+    사용처: OLSTriangle.polygon
+    이유: Vertex 필드 순서는 읽기 편한 위도/경도지만 GIS 도형 좌표는 X/Y/Z,
+          즉 경도/위도/높이 순서를 사용하기 때문이다.
+
+5.3 DemSample
+  역할:
+    DEM에서 읽은 지표고와 파일, CRS, 밴드, 행/열 등 값의 출처를 보관한다.
+
+5.4 HelipadRecord
+  역할:
+    원본 한 행을 검증/보완한 뒤 OLS 생성에 필요한 헬리포트 정보를 보관한다.
+
+5.5 GenerationResult
+  역할:
+    헬리포트 한 개의 최종 파일 경로, 안전 폴리곤 수, 충돌각을 보관한다.
+
+5.6 OLSTriangle
+  역할:
+    삼각형 꼭짓점과 회전각, 크기, 경사, 높이 조건을 보관한다.
+
+  vertices(self) [property]
+    입력: 현재 OLSTriangle 객체
+    출력: (apex, base_right, base_left)
+    비고: base_center는 계산용 보조점이라 외곽 꼭짓점에서 제외한다.
+
+  polygon(self) [property]
+    입력: 현재 OLSTriangle 객체
+    출력: Shapely Polygon Z
+    내부 호출: 각 Vertex.xyz_coordinate()
+
+  vertical_rise_m(self) [property]
+    출력: 밑변 높이 - 꼭짓점 높이
+
+  apex_z_m(self) [property]
+    출력: 꼭짓점 절대 표면고(DEM + AGL)
+
+  base_z_m(self) [property]
+    출력: OLS 경사가 적용된 밑변 절대 표면고
+
+5.7 CollisionLayers
+  역할:
+    반복되는 충돌 검사에 쓸 투영 도형과 상단고 NumPy 배열을 한곳에 보관한다.
+
+
+6. 보조 함수 아키텍처
+---------------------
+
+6.1 _finite_number(name, value)
+  역할:
+    값을 float로 바꾸고 NaN 또는 무한대가 아닌지 검사한다.
+  입력:
+    name  - 오류 메시지에 표시할 변수 이름
+    value - 검사할 값
+  출력:
+    유한한 float
+  실패:
+    float 변환이 불가능하거나 NaN/무한대이면 예외
+  호출자:
+    sample_dem_at_reference_point, _validate_parameters, rotation_angles,
+    format_angle_ranges, generate_all_helipad_outputs
+
+6.2 _identifier_text(value)
+  역할:
+    Shapefile의 여러 형태 id를 일관된 문자열로 바꾼다.
+  예:
+    3 -> "3", 3.0 -> "3", " A " -> "A"
+  실패:
+    결측값 또는 빈 문자열
+  호출자:
+    prepare_helipad_records
+
+6.3 _safe_folder_name(identifier)
+  역할:
+    id를 Windows에서 안전한 폴더명으로 바꾼다.
+  처리:
+    금지 문자를 '_'로 치환하고 CON/COM1 같은 예약명을 피한다.
+  출력:
+    안전한 단일 폴더명 문자열
+  호출자:
+    prepare_helipad_records
+
+
+7. 입력 준비 함수 아키텍처
+-------------------------
+
+7.1 load_source_layers(...)
+  역할:
+    건물/헬리포트 Shapefile을 읽고 후속 계산이 가능한지 확인한다.
+  주요 입력:
+    두 Shapefile 경로, 헬리포트 필수 필드명
+  검사:
+    파일 존재, CRS 존재, 빈 레이어 여부, 필수 열, 빈/유효하지 않은 Geometry
+  출력:
+    (buildings, helipads), 둘 다 EPSG:4326이며 행 번호는 0부터 다시 시작
+  호출자:
+    main
+
+7.2 prepare_helipad_records(...)
+  역할:
+    헬리포트별 생성 조건을 검증하고 HelipadRecord 목록을 만든다.
+  주요 처리:
+    1) id 정규화와 중복 검사
+    2) 경도/위도/AGL 숫자 변환
+    3) 기준 좌표가 Geometry 안에 있는지 검사
+    4) 동일 위치/Geometry peer를 이용한 AGL 보완
+    5) EPSG:5186에서 최근접 host 건물 공간 조인
+    6) 안전한 폴더명과 결과 객체 생성
+  내부 호출:
+    _identifier_text, _safe_folder_name, GeoPandas.sjoin_nearest
+  출력:
+    list[HelipadRecord]
+  실패:
+    중복 id, 잘못된 좌표, 해결할 수 없는 AGL, 폴더명 충돌 등
+  호출자:
+    main
+
+7.3 sample_dem_at_reference_point(latitude, longitude, dem_path, band)
+  역할:
+    헬리포트 기준점 하나가 포함된 DEM 셀의 지표고를 읽는다.
+  처리:
+    WGS84 좌표 -> DEM CRS 좌표 -> 래스터 행/열 -> 1x1 셀 읽기
+  내부 호출:
+    _finite_number, pyproj.Transformer, rasterio
+  출력:
+    DemSample
+  실패:
+    좌표/밴드 오류, 파일 없음, DEM 범위 밖, NoData 셀
+  호출자:
+    generate_all_helipad_outputs
+
+7.4 _sample_dem_at_geometry_points(frame, dem_path, band)
+  역할:
+    건물 등 여러 Geometry의 내부 대표점에서 DEM을 한꺼번에 표본 추출한다.
+  입력:
+    GeoDataFrame, DEM 경로, 밴드
+  출력:
+    입력 행과 같은 순서의 NumPy 고도 배열
+  예외 정책:
+    개별 NoData/범위 밖 위치는 실패시키지 않고 nan으로 둔다.
+  호출자:
+    prepare_collision_layers
+
+7.5 prepare_collision_layers(...)
+  역할:
+    매 회전각에서 재사용할 2차원 장애물 도형과 절대 상단고를 준비한다.
+  처리:
+    건물 상단고 = 대표점 DEM + 건물 A16
+    헬리포트 상단고 = 기준점 DEM + 보완 완료 AGL
+    Geometry의 Z 제거 -> 분석용 미터 CRS로 변환
+  내부 호출:
+    _sample_dem_at_geometry_points, shapely.force_2d, GeoDataFrame.to_crs
+  출력:
+    CollisionLayers
+  호출자:
+    generate_all_helipad_outputs
+
+
+8. 형상 생성 함수 아키텍처
+-------------------------
+
+8.1 _validate_parameters(...)
+  역할:
+    create_ols_triangle의 숫자 인수를 float로 통일하고 범위를 확인한다.
+  검사:
+    위도/경도 범위, AGL >= 0, 길이/폭 > 0, 0 <= 경사각 < 90
+  내부 호출:
+    _finite_number
+  출력:
+    검증된 값 8개의 튜플
+  호출자:
+    create_ols_triangle
+
+8.2 create_ols_triangle(...)
+  역할:
+    기준 꼭짓점에서 한 방위각으로 뻗는 3차원 삼각형 OLS 하나를 만든다.
+  처리:
+    1) 입력값 검증
+    2) WGS84 측지선을 따라 밑변 중심 계산
+    3) 진행방향의 좌/우 90도에 밑변 양 끝 계산
+    4) tan(경사각)으로 수직 상승량 계산
+    5) Vertex 4개와 조건을 OLSTriangle으로 묶기
+  내부 호출:
+    _validate_parameters, WGS84_GEOD.fwd
+  출력:
+    OLSTriangle
+  호출자:
+    create_rotated_ols_triangles
+
+8.3 rotation_angles(start_deg, end_deg, step_deg, include_end)
+  역할:
+    검사할 회전각을 일정한 간격으로 만든다.
+  기본 출력:
+    (0.0, 1.0, ..., 359.0)
+  특징:
+    float 간격을 지원하며 부동소수점 허용오차를 적용한다.
+  안전장치:
+    최대 1,000,000개까지만 생성
+  호출자:
+    main
+
+8.4 create_rotated_ols_triangles(...)
+  역할:
+    동일한 기준점/크기/경사에 여러 방위각을 적용한다.
+  내부 호출:
+    각 angle마다 create_ols_triangle
+  출력:
+    list[OLSTriangle]
+  호출자:
+    generate_all_helipad_outputs
+
+
+9. 충돌 판정 함수 아키텍처
+-------------------------
+
+9.1 _obstacle_penetrates_triangle(...)
+  역할:
+    장애물 하나가 삼각형 OLS 표면에 닿거나 관통하는지 계산한다.
+  처리:
+    1) 장애물 높이가 nan이면 False
+    2) OLS footprint와 장애물 footprint의 교집합 계산
+    3) 교집합 좌표를 OLS 중심선 방향에 투영해 진행거리 계산
+    4) 가장 낮은 중첩 위치의 OLS 높이 계산
+    5) 장애물 상단고와 비교
+  출력:
+    bool (True = 충돌)
+  호출자:
+    validate_candidate_triangles
+
+9.2 validate_candidate_triangles(triangles, collision_layers, helipad)
+  역할:
+    헬리포트 하나의 모든 회전 후보를 안전/충돌로 나눈다.
+  처리:
+    1) 각 후보를 분석 CRS로 투영
+    2) 공간 인덱스로 수평 교차 후보만 검색
+    3) host 건물과 자기/peer 헬리포트 제외
+    4) 각 장애물의 실제 높이 침범 여부 확인
+  내부 호출:
+    _obstacle_penetrates_triangle
+  출력:
+    (안전 OLSTriangle 리스트, 충돌 회전각 튜플)
+  호출자:
+    generate_all_helipad_outputs
+
+
+10. 출력 함수 아키텍처
+----------------------
+
+10.1 format_angle_ranges(angles_deg, step_deg)
+  역할:
+    연속된 충돌각을 CSV용 범위로 줄인다.
+  예:
+    [0, 1, 2, 8, 9] -> "[0,2] & [8,9]"
+  출력:
+    문자열
+  호출자:
+    generate_all_helipad_outputs
+
+10.2 _triangle_record(triangle, dem_sample, helipad)
+  역할:
+    OLSTriangle 하나를 Shapefile 속성 한 행으로 변환한다.
+  출력:
+    10자 이하 DBF 필드명과 geometry가 들어 있는 dict
+  내부 사용:
+    triangle.polygon 및 여러 property
+  호출자:
+    save_shapefile
+
+10.3 save_shapefile(...)
+  역할:
+    안전한 Polygon Z 목록을 EPSG:4326 Shapefile로 저장한다.
+  처리:
+    OLSTriangle -> dict -> GeoDataFrame -> ESRI Shapefile
+  내부 호출:
+    _triangle_record, GeoDataFrame.to_file
+  출력:
+    저장된 절대 Path
+  부가 기능:
+    template_triangle이 있으면 행이 0개인 Polygon Z 스키마도 만들 수 있다.
+  호출자:
+    generate_all_helipad_outputs
+
+10.4 remove_generated_shapefile(output_path, allowed_root)
+  역할:
+    안전각이 없을 때 과거 실행에서 남은 같은 이름의 결과 묶음을 제거한다.
+  안전장치:
+    output_path가 allowed_root 아래인지 확인한 뒤 알려진 sidecar만 삭제한다.
+  호출자:
+    generate_all_helipad_outputs
+
+10.5 assert_shapefile_unlocked(output_path, allowed_root)
+  역할:
+    QGIS 등이 기존 출력 파일을 열어 두었는지 쓰기 전에 검사한다.
+  방식:
+    파일을 자기 자신 이름으로 rename하여 내용 변경 없이 잠금 여부 확인
+  호출자:
+    generate_all_helipad_outputs
+
+10.6 generate_all_helipad_outputs(...)
+  역할:
+    DEM 준비부터 후보 생성, 충돌 판정, 파일/CSV 저장까지 전체 작업을 지휘한다.
+  입력:
+    검증된 헬리포트 목록, 원본 레이어, 회전각, 출력/DEM/형상 설정
+  내부 호출:
+    sample_dem_at_reference_point
+    prepare_collision_layers
+    create_rotated_ols_triangles
+    validate_candidate_triangles
+    assert_shapefile_unlocked
+    save_shapefile 또는 remove_generated_shapefile
+    format_angle_ranges
+  출력:
+    list[GenerationResult]
+  파일 출력:
+    <output_root>/<경사>/<id>/Polygon_<id>.shp
+    <output_root>/<경사>/generation_summary.csv
+  호출자:
+    main
+
+
+11. 실행 진입점 함수 아키텍처
+----------------------------
+
+11.1 _build_parser()
+  역할:
+    argparse에 모든 명령행 옵션, 자료형, 기본값, 도움말을 등록한다.
+  출력:
+    argparse.ArgumentParser
+  호출자:
+    main
+
+11.2 _format_batch_summary(results, angles, output_root, slope_deg)
+  역할:
+    처리 건수, 안전/충돌 수, 출력 경로 등을 여러 줄 문자열로 만든다.
+  출력:
+    print에 바로 전달할 문자열
+  호출자:
+    main
+
+11.3 main(argv=None)
+  역할:
+    프로그램의 진입점. 각 상위 함수를 작업 순서대로 연결한다.
+  순서:
+    _build_parser
+      -> load_source_layers
+      -> prepare_helipad_records
+      -> rotation_angles
+      -> generate_all_helipad_outputs
+      -> _format_batch_summary
+  오류 처리:
+    OSError/ValueError를 argparse 오류로 바꾸어 짧고 읽기 좋은 메시지를 출력한다.
+  출력:
+    성공 종료 코드 0
+
+
+12. 코드를 읽는 추천 순서
+------------------------
+
+처음부터 1행씩 읽기보다 다음 순서로 읽으면 구조를 이해하기 쉽다.
+
+  1) 파일 맨 위 모듈 설명과 ScriptConfig
+  2) main
+  3) generate_all_helipad_outputs
+  4) load_source_layers / prepare_helipad_records
+  5) create_ols_triangle / create_rotated_ols_triangles
+  6) prepare_collision_layers / validate_candidate_triangles
+  7) _obstacle_penetrates_triangle
+  8) save_shapefile 및 나머지 작은 보조 함수
+
+main에서 큰 흐름을 먼저 보고, 호출되는 함수 안으로 한 단계씩 들어가는 방식이다.
+함수명 앞의 '_'는 외부에서 직접 쓰기보다는 이 파일 내부 구현을 돕는 함수라는 관례다.
+
