@@ -52,7 +52,7 @@ RANK_FIELD = "순위"
 SUMMARY_NAME = "안전지대.csv"
 SHP_ENCODING = "CP949"
 ALWAYS_INCLUDE_MAX_OVERLAP = 5
-MIN_BEARING_SEPARATION_DEG = 70.0
+MIN_BEARING_SEPARATION_DEG = 130.0
 
 Identifier = int | float | str
 
@@ -324,10 +324,8 @@ def select_safest_candidates(
             kind="stable",
         )
         if eligible.empty:
-            raise ValueError(
-                f"방위각 {primary_bearing:g}도에서 "
-                f"{MIN_BEARING_SEPARATION_DEG:g}도 이상 떨어진 후보가 없습니다."
-            )
+            secondary_bearings.append(primary_bearing)
+            continue
         secondary = eligible.iloc[0]
         secondary_indices.append(int(secondary.name))
         secondary_bearings.append(float(secondary[BEARING_FIELD]))
@@ -366,6 +364,29 @@ def write_selected_shapefile(
         driver="ESRI Shapefile",
         encoding=SHP_ENCODING,
         promote_to_multi=True,
+    )
+    output_path.with_suffix(".qml").write_text(
+        """<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.0" styleCategories="Symbology">
+  <renderer-v2 type="singleSymbol" enableorderby="0" symbollevels="0" forceraster="0">
+    <symbols>
+      <symbol type="fill" name="0" alpha="1" clip_to_extent="1" force_rhr="0">
+        <layer class="SimpleFill" enabled="1" locked="0" pass="0">
+          <Option type="Map">
+            <Option name="color" type="QString" value="135,206,235,217"/>
+            <Option name="outline_color" type="QString" value="135,206,235,217"/>
+            <Option name="outline_style" type="QString" value="solid"/>
+            <Option name="outline_width" type="QString" value="0.26"/>
+            <Option name="outline_width_unit" type="QString" value="MM"/>
+            <Option name="style" type="QString" value="solid"/>
+          </Option>
+        </layer>
+      </symbol>
+    </symbols>
+  </renderer-v2>
+</qgis>
+""",
+        encoding="utf-8",
     )
     return output_path
 
