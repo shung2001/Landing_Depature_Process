@@ -63,8 +63,8 @@ EPSG:4326은 수평 2차원 좌표계이므로 Polygon Z는 EPSG:4326 타원체�
 기록된다. 건물 ``A16``이 0 또는 결측이면 높이 미상으로 보고, XY 중첩만으로
 해당 방위각을 제거하지 않는다.
 충돌각은 ``[0,10] & [20,30]`` 형식으로 요약 CSV에 저장한다. 0도와 360도는
-같은 방향이므로 기본 출력에서는 360도를 중복 생성하지 않는다. 입력 경로와
-필드명은 아래 ``SCRIPT_CONFIG`` 또는 명령행 인수에서 바꿀 수 있다.
+같은 방향이므로 기본 출력에서는 360도를 중복 생성하지 않는다. 입력 경로,
+필드명, 회전각 등의 실행 조건은 아래 ``SCRIPT_CONFIG``에서 바꿀 수 있다.
 """
 
 # 타입 힌트에서 아직 정의되지 않은 클래스를 문자열로 감싸지 않고 쓸 수 있게 한다.
@@ -72,12 +72,12 @@ EPSG:4326은 수평 2차원 좌표계이므로 Polygon Z는 EPSG:4326 타원체�
 from __future__ import annotations
 
 # 표준 라이브러리: Python 설치 시 기본으로 제공된다.
-import argparse
 from dataclasses import dataclass
 import math
 import os
 from pathlib import Path
 import re
+import sys
 from typing import Sequence
 
 # 외부 라이브러리: 표/공간 자료/좌표 변환/래스터 처리를 담당한다.
@@ -97,7 +97,7 @@ from shapely.geometry import Polygon
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SONGPA_DATA_DIR = PROJECT_ROOT / "자료" / "안전성" / "송파구"
 
-# 사용자가 명령행 옵션을 주지 않았을 때 사용할 기본 입출력 경로이다.
+# 스크립트 설정에서 사용할 기본 입출력 경로이다.
 DEFAULT_BUILDING_PATH = SONGPA_DATA_DIR / "송파구_건물_4326.shp"
 DEFAULT_HELIPAD_PATH = SONGPA_DATA_DIR / "송파구_옥상헬리포트_4326.shp"
 DEFAULT_DEM_PATH = SONGPA_DATA_DIR / "송파구_DEM.tif"
@@ -106,7 +106,7 @@ DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "자료" / "결과물" / "Polygon"
 
 @dataclass(frozen=True)
 class ScriptConfig:
-    """명령행 인수 없이 실행할 때 사용할 값을 한곳에 모아 둔 설정 객체.
+    """스크립트를 실행할 때 사용할 값을 한곳에 모아 둔 설정 객체.
 
     ``@dataclass``는 아래 필드를 받는 생성자 등을 자동으로 만들어 준다.
     ``frozen=True``이므로 한 번 만든 설정 객체의 값을 실수로 바꿀 수 없다.
@@ -143,8 +143,9 @@ class ScriptConfig:
 
 
 # =========================== 스크립트 설정 ===========================
-# 아래 입력 경로와 필드명을 바꾸면 parser 인수 없이 일괄 실행할 수 있다.
-# 명령행 인수를 함께 지정하면 해당 명령행 값이 이 설정보다 우선한다.
+# 아래 값만 수정한 뒤 별도 명령행 인수 없이 스크립트를 실행한다.
+# 단일 방위각만 생성하려면 start_rotation_deg와 end_rotation_deg를 같은 값으로
+# 두고 include_end_angle=True로 설정한다(예: 0도만 생성하려면 0, 0, True).
 SCRIPT_CONFIG = ScriptConfig(
     building_path=DEFAULT_BUILDING_PATH,
     helipad_path=DEFAULT_HELIPAD_PATH,
@@ -1598,132 +1599,6 @@ def generate_all_helipad_outputs(
     return results
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """터미널에서 받을 명령행 옵션과 도움말을 정의한다.
-
-    ``argparse``는 문자열로 들어온 옵션을 ``Path``/``float``/``int`` 등 지정한
-    자료형으로 변환한다. 옵션을 생략하면 ``SCRIPT_CONFIG``의 값이 사용된다.
-    이 함수는 옵션을 '정의'만 하고, 실제 해석은 ``main``의 ``parse_args``가 한다.
-    parser는 원하는 변수를 터미널에서 입력하는 방식으로 input과는 조금 다르다.
-    만일 방위각을 하나만 설정하길 희망한다면, python  코드\polygon\장애물접근표면.py --start-angle 0의 형태로 진행하면 됨.
-    """
-
-    parser = argparse.ArgumentParser(
-        description=(
-            "송파구 옥상헬리포트의 id/x_long/y_lati/A16을 읽어 OLS 경사/id별 "
-            "폴더에 건물·다른 헬리포트가 OLS 표면고에 닿거나 관통하지 않는 "
-            "삼각형 Polygon Z만 저장합니다."
-        )
-    )
-    # 입력/출력 경로 옵션 -------------------------------------------------
-    parser.add_argument(
-        "--buildings",
-        type=Path,
-        default=SCRIPT_CONFIG.building_path,
-        help=f"건물 Shapefile 경로(기본: {SCRIPT_CONFIG.building_path})",
-    )
-    parser.add_argument(
-        "--helipads",
-        type=Path,
-        default=SCRIPT_CONFIG.helipad_path,
-        help=f"옥상 헬리포트 Shapefile 경로(기본: {SCRIPT_CONFIG.helipad_path})",
-    )
-    parser.add_argument(
-        "--output-root",
-        type=Path,
-        default=SCRIPT_CONFIG.output_root,
-        help=f"id별 출력 폴더의 상위 경로(기본: {SCRIPT_CONFIG.output_root})",
-    )
-    parser.add_argument(
-        "--dem",
-        type=Path,
-        default=SCRIPT_CONFIG.dem_path,
-        help=f"기준점 지표고를 읽을 DEM 경로(기본: {SCRIPT_CONFIG.dem_path})",
-    )
-    parser.add_argument(
-        "--dem-band",
-        type=int,
-        default=SCRIPT_CONFIG.dem_band,
-        help=f"DEM 고도 밴드 번호(기본: {SCRIPT_CONFIG.dem_band})",
-    )
-    # 입력 Shapefile의 필드명 옵션 ---------------------------------------
-    parser.add_argument(
-        "--id-field",
-        default=SCRIPT_CONFIG.id_field,
-        help=f"헬리포트 id 필드(기본: {SCRIPT_CONFIG.id_field})",
-    )
-    parser.add_argument(
-        "--longitude-field",
-        default=SCRIPT_CONFIG.longitude_field,
-        help=f"헬리포트 경도 필드(기본: {SCRIPT_CONFIG.longitude_field})",
-    )
-    parser.add_argument(
-        "--latitude-field",
-        default=SCRIPT_CONFIG.latitude_field,
-        help=f"헬리포트 위도 필드(기본: {SCRIPT_CONFIG.latitude_field})",
-    )
-    parser.add_argument(
-        "--agl-field",
-        default=SCRIPT_CONFIG.agl_field,
-        help=f"헬리포트 AGL 필드(기본: {SCRIPT_CONFIG.agl_field})",
-    )
-    # 좌표계와 회전 범위 옵션 --------------------------------------------
-    parser.add_argument(
-        "--host-match-crs",
-        default=SCRIPT_CONFIG.host_match_crs,
-        help=f"최근접 건물 거리 계산 CRS(기본: {SCRIPT_CONFIG.host_match_crs})",
-    )
-    parser.add_argument(
-        "--start-angle",
-        type=float,
-        default=SCRIPT_CONFIG.start_rotation_deg,
-        help=f"첫 회전각(도, 포함, 기본: {SCRIPT_CONFIG.start_rotation_deg:g})",
-    )
-    parser.add_argument(
-        "--end-angle",
-        type=float,
-        default=SCRIPT_CONFIG.end_rotation_deg,
-        help=(
-            "마지막 회전각 경계(도, 기본적으로 미포함, 기본: "
-            f"{SCRIPT_CONFIG.end_rotation_deg:g})"
-        ),
-    )
-    parser.add_argument(
-        "--angle-step",
-        type=float,
-        default=SCRIPT_CONFIG.rotation_step_deg,
-        help=f"회전각 간격(도, 기본: {SCRIPT_CONFIG.rotation_step_deg:g})",
-    )
-    # action=BooleanOptionalAction은 --include-end-angle과
-    # --no-include-end-angle 두 형태를 자동으로 지원한다.
-    parser.add_argument(
-        "--include-end-angle",
-        action=argparse.BooleanOptionalAction,
-        default=SCRIPT_CONFIG.include_end_angle,
-        help="종료각 포함 여부(360도는 0도와 같은 중복 형상임)",
-    )
-    # OLS 형상 크기/경사 옵션 ---------------------------------------------
-    parser.add_argument(
-        "--height",
-        type=float,
-        default=SCRIPT_CONFIG.triangle_height_m,
-        help=f"삼각형의 수평 중심선 길이(m, 기본: {SCRIPT_CONFIG.triangle_height_m:g})",
-    )
-    parser.add_argument(
-        "--base-width",
-        type=float,
-        default=SCRIPT_CONFIG.base_width_m,
-        help=f"밑변 폭(m, 기본: {SCRIPT_CONFIG.base_width_m:g})",
-    )
-    parser.add_argument(
-        "--ols-angle",
-        type=float,
-        default=SCRIPT_CONFIG.ols_slope_deg,
-        help=f"바깥쪽으로 상승하는 OLS 종단 경사각(도, 기본: {SCRIPT_CONFIG.ols_slope_deg:g})",
-    )
-    return parser
-
-
 def _format_batch_summary(
     results: Sequence[GenerationResult],
     angles: Sequence[float],
@@ -1764,45 +1639,41 @@ def _format_batch_summary(
     return "\n".join(rows)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """명령행 실행의 시작점이며 전체 함수를 올바른 순서로 호출한다.
+def main() -> int:
+    """``SCRIPT_CONFIG`` 설정으로 전체 작업을 실행한다.
 
-    ``argv=None``이면 실제 터미널 인수를 사용한다. 테스트에서는 문자열 목록을
-    직접 넘겨 원하는 옵션을 재현할 수 있다. 성공하면 운영체제 종료 코드 0을,
-    입력 오류가 있으면 ``argparse``를 통해 오류 메시지와 종료 코드 2를 낸다.
+    성공하면 운영체제 종료 코드 0을, 입력 또는 파일 오류가 있으면 오류 내용을
+    표준 오류에 출력하고 종료 코드 1을 반환한다.
     """
 
-    parser = _build_parser()
-
-    # 여기서 사용자가 입력한 문자열 옵션이 args.buildings 같은 속성으로 바뀐다.
-    args = parser.parse_args(argv)
+    config = SCRIPT_CONFIG
 
     try:
         # 1) 원본 공간 파일 읽기 및 공통 검증
         buildings, helipad_frame = load_source_layers(
-            building_path=args.buildings,
-            helipad_path=args.helipads,
-            id_field=args.id_field,
-            longitude_field=args.longitude_field,
-            latitude_field=args.latitude_field,
-            agl_field=args.agl_field,
+            building_path=config.building_path,
+            helipad_path=config.helipad_path,
+            id_field=config.id_field,
+            longitude_field=config.longitude_field,
+            latitude_field=config.latitude_field,
+            agl_field=config.agl_field,
         )
         # 2) 헬리포트별 AGL/host/기준 좌표 정리
         helipads = prepare_helipad_records(
             buildings=buildings,
             helipads=helipad_frame,
-            id_field=args.id_field,
-            longitude_field=args.longitude_field,
-            latitude_field=args.latitude_field,
-            agl_field=args.agl_field,
-            host_match_crs=args.host_match_crs,
+            id_field=config.id_field,
+            longitude_field=config.longitude_field,
+            latitude_field=config.latitude_field,
+            agl_field=config.agl_field,
+            host_match_crs=config.host_match_crs,
         )
         # 3) 검사할 회전각 목록 생성
         angles = rotation_angles(
-            start_deg=args.start_angle,
-            end_deg=args.end_angle,
-            step_deg=args.angle_step,
-            include_end=args.include_end_angle,
+            start_deg=config.start_rotation_deg,
+            end_deg=config.end_rotation_deg,
+            step_deg=config.rotation_step_deg,
+            include_end=config.include_end_angle,
         )
         # 4) OLS 생성 → 충돌 판정 → 파일 저장 → CSV 작성
         results = generate_all_helipad_outputs(
@@ -1810,21 +1681,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             buildings=buildings,
             helipad_frame=helipad_frame,
             angles_deg=angles,
-            output_root=args.output_root,
-            dem_path=args.dem,
-            dem_band=args.dem_band,
-            horizontal_height_m=args.height,
-            base_width_m=args.base_width,
-            slope_deg=args.ols_angle,
-            angle_step_deg=args.angle_step,
+            output_root=config.output_root,
+            dem_path=config.dem_path,
+            dem_band=config.dem_band,
+            horizontal_height_m=config.triangle_height_m,
+            base_width_m=config.base_width_m,
+            slope_deg=config.ols_slope_deg,
+            angle_step_deg=config.rotation_step_deg,
         )
-    # 예상 가능한 입력/파일 오류는 긴 traceback 대신 사용법과 함께 보여 준다.
+    # 예상 가능한 입력/파일 오류는 긴 traceback 대신 간단한 메시지로 보여 준다.
     except (OSError, ValueError) as error:
-        parser.error(str(error))
+        print(f"오류: {error}", file=sys.stderr)
+        return 1
 
     # 5) 사용자가 확인할 수 있도록 최종 통계를 표준 출력에 표시한다.
-    output_root = Path(args.output_root).expanduser().resolve()
-    print(_format_batch_summary(results, angles, output_root, args.ols_angle))
+    output_root = Path(config.output_root).expanduser().resolve()
+    print(_format_batch_summary(results, angles, output_root, config.ols_slope_deg))
     return 0
 
 

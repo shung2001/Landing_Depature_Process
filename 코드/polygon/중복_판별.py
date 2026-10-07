@@ -52,7 +52,7 @@ def project_root() -> Path:
 
 
 def default_input_dir() -> Path:
-    return project_root() / "자료" / "결과물" / "Polygon" / "12.5"
+    return project_root() / "자료" / "결과물" / "Polygon" / "8"
 
 
 def natural_path_key(path: Path) -> tuple[tuple[int, int | str], ...]:

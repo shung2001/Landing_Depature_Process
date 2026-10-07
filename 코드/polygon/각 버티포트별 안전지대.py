@@ -64,7 +64,7 @@ def project_root() -> Path:
 
 
 def default_input_dir() -> Path:
-    return project_root() / "자료" / "결과물" / "Polygon" / "12.5"
+    return project_root() / "자료" / "결과물" / "Polygon" / "8"
 
 
 def default_overlap_path() -> Path:
@@ -72,7 +72,7 @@ def default_overlap_path() -> Path:
 
 
 def default_output_dir() -> Path:
-    return project_root() / "자료" / "결과물" / "Polygon" / "12.5" / "안전지대"
+    return project_root() / "자료" / "결과물" / "Polygon" / "8" / "안전지대"
 
 
 def normalize_identifier(value: object) -> Identifier:

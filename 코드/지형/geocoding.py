@@ -29,8 +29,8 @@ except ImportError:
 # 실제 키가 들어간 파일은 외부에 공유하거나 Git에 커밋하지 마세요.
 KAKAO_REST_API_KEY = "f1161b2a855cf332983a74de75da4167"
 
-INPUT_CSV = Path("기초자료/2020년 헬기 이착륙장 현황_착륙가능.csv")
-OUTPUT_CSV = Path("기초자료/2020년 헬기 이착륙장 현황_착륙가능_5186.csv")
+INPUT_CSV = Path("기초자료/2020년 헬기 이착륙장 현황.csv")
+OUTPUT_CSV = Path("기초자료/2020년 헬기 이착륙장 현황_5186.csv")
 REQUEST_TIMEOUT = 10.0
 RETRIES = 3
 REQUEST_INTERVAL = 0.05
