@@ -1,0 +1,2 @@
+﻿source_row,A0,A21,A16,building_height_m,height_reliable,line_height_m,vertical_gap_m,외곽_distance_m,내곽_distance_m,in_buffer,intersects_interior,fully_inside,status
+27260,,,555.0,555.0,True,609.6,54.60000000000002,1743.1244579759207,743.1247664009968,False,True,True,수직간격임계값이하

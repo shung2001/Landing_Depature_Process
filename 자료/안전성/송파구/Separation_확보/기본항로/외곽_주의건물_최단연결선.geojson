@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "외곽_주의건물_최단연결선",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::5186" } },
+"features": [
+{ "type": "Feature", "properties": { "source_row": 27260, "target": "외곽", "distance_m": 1743.1244579759393 }, "geometry": { "type": "LineString", "coordinates": [ [ 209062.117130378377624, 545856.042876509716734 ], [ 208606.116408883273834, 544173.620153770316392 ] ] } },
+{ "type": "Feature", "properties": { "source_row": 27260, "target": "내곽", "distance_m": 743.12476640098919 }, "geometry": { "type": "LineString", "coordinates": [ [ 209062.117130378377624, 545856.042876509716734 ], [ 208867.71596292918548, 545138.796332751633599 ] ] } }
+]
+}

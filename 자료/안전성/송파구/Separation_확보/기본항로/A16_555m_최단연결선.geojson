@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "A16_555m_최단연결선",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::5186" } },
+"features": [
+{ "type": "Feature", "properties": { "source_row": 27260, "A16": 555.0, "line": "외곽", "line_height_m": 609.6, "vertical_gap_m": 54.6, "xy_distance_m": 1743.1244579759207, "fully_inside": true, "building_x": 209062.11713037838, "building_y": 545856.04287650972, "line_x": 208606.11640888327, "line_y": 544173.62015377032 }, "geometry": { "type": "LineString", "coordinates": [ [ 209062.117130378377624, 545856.042876509716734 ], [ 208606.116408883273834, 544173.620153770316392 ] ] } },
+{ "type": "Feature", "properties": { "source_row": 27260, "A16": 555.0, "line": "내곽", "line_height_m": 457.2, "vertical_gap_m": -97.8, "xy_distance_m": 743.1247664009968, "fully_inside": true, "building_x": 209062.11713037838, "building_y": 545856.04287650972, "line_x": 208867.71596292919, "line_y": 545138.79633275163 }, "geometry": { "type": "LineString", "coordinates": [ [ 209062.117130378377624, 545856.042876509716734 ], [ 208867.71596292918548, 545138.796332751633599 ] ] } }
+]
+}

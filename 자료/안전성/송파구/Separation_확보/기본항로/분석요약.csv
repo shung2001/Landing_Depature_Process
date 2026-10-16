@@ -1,0 +1,3 @@
+﻿line,line_height_m,scope_count,buffer_count,buffer_valid_count,buffer_unknown_count,buffer_gap_min_m,buffer_gap_median_m,buffer_gap_max_m,scope_exceed_count,scope_within_threshold_count,scope_unknown_count,risk_min_xy_m
+외곽,609.6,16441,1530,953,577,538.8000000000001,595.4,607.1,0,1,6169,1743.1244579759207
+내곽,457.2,7584,1929,1187,742,357.84,444.0,454.59999999999997,1,0,3106,743.1247664009968
