@@ -1,4 +1,4 @@
-"""IAF–FAF 경로와 내곽_2000(1500ft)의 높이 간격을 CSV/PNG로 저장한다.
+"""FAF→외곽 IAF(2000ft) 이동 중 내곽을 통과할 때의 높이 차이와 3.76m 버퍼 여유.
 
 실행: python 코드/지형/FAF_외곽이동시_1500ft와의_간격.py
 필요 패키지: geopandas, shapely, numpy, pandas, matplotlib.
@@ -8,6 +8,8 @@ Shapely의 3D 교차 결과 Z는 사용하지 않는다(서로 다른 높이를 
 """
 
 import argparse
+from datetime import datetime
+import shutil
 from pathlib import Path
 
 import geopandas as gpd
@@ -18,12 +20,13 @@ from matplotlib import font_manager
 import numpy as np
 import pandas as pd
 from shapely import force_2d, get_coordinates
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString
 
 
 ROOT = Path(__file__).resolve().parents[2]
 DIRECTORY = ROOT / '자료/안전성/송파구'
-NAMES = ('IAF_FAF', 'IAF_FAF_Out')
+NAMES = ('FAF_IAF_In', 'FAF_IAF_Out')
+LEGACY_NAMES = dict(zip(NAMES, ('IAF_FAF', 'IAF_FAF_Out')))
 OUTPUT_NAME = 'FAF_외곽이동시_1500ft와의_간격'
 
 
@@ -46,9 +49,12 @@ def intersection_points(geometry):
     raise ValueError('경로와 내곽 선이 구간으로 겹칩니다. 점 교차 분석으로 처리할 수 없습니다.')
 
 
-def analyze_route(row, layer, number, ring, reference_z, tolerance):
+def analyze_route(row, layer, number, ring, reference_z, tolerance, route_buffer=3.76, ring_buffer=0):
     xyz = coordinates(row.geometry, f'{layer} 행 {number}')
-    line = force_2d(row.geometry)
+    # 저장 방향과 무관하게 낮은 FAF에서 높은 IAF 방향으로 거리를 계산한다.
+    if xyz[0, 2] > xyz[-1, 2]:
+        xyz = xyz[::-1].copy()
+    line = LineString(xyz[:, :2])
     distance = np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(xyz[:, :2], axis=0), axis=1))]
     if np.any(np.diff(distance) <= 0):
         raise ValueError(f'{layer} 행 {number}: 중복 XY 꼭짓점/수직 선분은 지원하지 않습니다.')
@@ -75,6 +81,12 @@ def analyze_route(row, layer, number, ring, reference_z, tolerance):
                              distance_m=at, progress_pct=100 * at / distance[-1],
                              x=xy.x, y=xy.y, route_z_m=z, ring_z_m=reference_z,
                              signed_gap_m=gap, absolute_gap_m=abs(gap),
+                             route_buffer_radius_m=route_buffer, ring_buffer_radius_m=ring_buffer,
+                             joby_lower_z_m=z - route_buffer, joby_upper_z_m=z + route_buffer,
+                             vertical_clearance_m=abs(gap) - route_buffer - ring_buffer,
+                             vertical_buffer_overlap=abs(gap) <= route_buffer + ring_buffer + 1e-8,
+                             crossing_role=('interior_crossing' if tolerance < at < distance[-1] - tolerance
+                                            else 'endpoint_contact'),
                              xy_distance_to_ring_m=xy_distance))
     sample_at = np.unique(np.r_[distance, np.linspace(0, distance[-1], 201),
                                 [contact['distance_m'] for contact in contacts]])
@@ -94,6 +106,9 @@ def analyze_route(row, layer, number, ring, reference_z, tolerance):
                    contact_count=len(contacts),
                    min_contact_gap_m=min((c['absolute_gap_m'] for c in contacts), default=np.nan),
                    max_contact_gap_m=max((c['absolute_gap_m'] for c in contacts), default=np.nan))
+    summary.update(route_buffer_radius_m=route_buffer, ring_buffer_radius_m=ring_buffer,
+                   min_crossing_clearance_m=min((c['vertical_clearance_m'] for c in contacts
+                                                if c['crossing_role'] == 'interior_crossing'), default=np.nan))
     return dict(base=base, line=line, distance=distance, z=xyz[:, 2],
                 contacts=contacts, samples=samples, summary=summary)
 
@@ -113,6 +128,9 @@ def plot_profiles(routes, layer, height, output):
     for ax, route in zip(axes.flat, routes):
         at, z = route['distance'], route['z']
         ax.plot(at, z, color='#2166ac', lw=2, label='경로 Z')
+        radius = route['summary']['route_buffer_radius_m']
+        ax.fill_between(at, z - radius, z + radius, color='#2166ac', alpha=.3,
+                        label=f'경로 ±{radius:g}m 버퍼')
         ax.axhline(height, color='#d6604d', ls='--', label=f'내곽 기준 {height:g}m')
         ax.fill_between(at, z, height, color='#92c5de', alpha=.25)
         for index, c in enumerate(route['contacts']):
@@ -121,20 +139,20 @@ def plot_profiles(routes, layer, height, output):
             ax.annotate('', xy=(x, value), xytext=(x, height),
                         arrowprops=dict(arrowstyle='<->', color='#7b3294', lw=1.4))
             # 위치별 값은 부호와 함께 표시하여 기준보다 위/아래를 구분.
-            ax.annotate(f"ΔZ {c['signed_gap_m']:+.2f}m", xy=(x, (value + height) / 2),
+            ax.annotate(f"ΔZ {c['signed_gap_m']:+.2f}m\n여유 {c['vertical_clearance_m']:.2f}m", xy=(x, (value + height) / 2),
                         xytext=(5 if x < at[-1] / 2 else -5, 12 + 12 * (index % 2)),
                         textcoords='offset points', fontsize=8,
                         ha='left' if x < at[-1] / 2 else 'right', color='#7b3294')
         s = route['summary']
         ax.set_title(f"행 {s['feature_row']} / id {s['source_id']} / 접점 {s['contact_count']}개", fontsize=10)
-        ax.set_xlabel('저장된 시작점부터 누적 거리 (m)', fontsize=8)
+        ax.set_xlabel('FAF부터 IAF 방향 누적 거리 (m)', fontsize=8)
         ax.set_ylabel('Z (m)', fontsize=9)
         ax.grid(alpha=.25)
         ax.margins(x=.14, y=.22)
     for ax in list(axes.flat)[len(routes):]:
         ax.set_visible(False)
     axes.flat[0].legend(fontsize=7, loc='lower left')
-    fig.suptitle(f'{layer}: 내곽_2000과의 높이 간격\n'
+    fig.suptitle(f'{layer}: 내곽과의 높이 간격\n'
                  '화살표 = XY 교차/허용거리 내 끝점의 높이 차이 (ΔZ = 경로 Z - 내곽 Z)', fontsize=15)
     fig.tight_layout(rect=(0, 0, 1, .95))
     fig.savefig(output / f'{layer}_높이간격.png', dpi=180)
@@ -146,7 +164,7 @@ def plot_overview(routes, ring, height, output):
     for row, layer in enumerate(NAMES):
         subset = [r for r in routes if r['base']['layer'] == layer]
         ax, bars = axes[row]
-        ax.plot(*ring.xy, color='#d6604d', lw=2, label=f'내곽_2000 Z={height:g}m')
+        ax.plot(*ring.xy, color='#d6604d', lw=2, label=f'내곽 Z={height:g}m')
         for route in subset:
             ax.plot(*route['line'].xy, lw=.8, color='#2166ac', alpha=.7)
             for contact in route['contacts']:
@@ -170,7 +188,7 @@ def plot_overview(routes, ring, height, output):
         bars.set_title('내곽과 만나는 위치의 최소 높이 간격')
         bars.set_ylim(0, max([v for v in values if np.isfinite(v)] + [1]) * 1.18)
         bars.grid(axis='y', alpha=.25)
-    fig.suptitle('IAF–FAF와 1500ft 내곽의 높이 간격 (3차원 최단거리 아님)', fontsize=16)
+    fig.suptitle('FAF→외곽 IAF(2000ft): 1500ft 내곽 통과 시 높이 간격', fontsize=16)
     fig.tight_layout(rect=(0, 0, 1, .96))
     fig.savefig(output / '전체_높이간격.png', dpi=180)
     plt.close(fig)
@@ -236,7 +254,7 @@ def plot_buffer(routes, ring, buffer_m, output):
     for row, layer in enumerate(NAMES):
         subset = [r for r in routes if r['base']['layer'] == layer]
         ax, bars = axes[row]
-        ax.plot(*ring.xy, color='black', lw=2, label='내곽_2000')
+        ax.plot(*ring.xy, color='black', lw=2, label='내곽')
         for route in subset:
             xy = np.asarray(route['line'].coords)
             ax.plot(xy[:, 0], xy[:, 1], color='#2166ac', lw=.8, alpha=.55)
@@ -263,7 +281,7 @@ def plot_buffer(routes, ring, buffer_m, output):
         bars.set_title(f'{sum(r["buffer_result"]["buffer_overlap"] for r in subset)}/{len(subset)} 경로 버퍼 겹침')
         bars.grid(axis='y', alpha=.25)
         bars.legend()
-    fig.suptitle(f'합산 {buffer_m:g}m 3D 거리 버퍼 판정 (각 선 {buffer_m / 2:g}m씩과 동등)\n'
+    fig.suptitle(f'경로 버퍼와 내곽 버퍼 합산 {buffer_m:g}m: 3D 거리 판정\n'
                  '빨강: 최단거리 <= 합산 버퍼 / 파랑: 합산 버퍼 초과', fontsize=16)
     fig.tight_layout(rect=(0, 0, 1, .94))
     fig.savefig(output / '3D_버퍼겹침_판정.png', dpi=180)
@@ -275,35 +293,64 @@ def main():
     parser.add_argument('--input-dir', type=Path, default=DIRECTORY)
     parser.add_argument('--output-dir', type=Path)
     parser.add_argument('--contact-tolerance', type=float, default=.01, help='끝점 접촉 허용 거리(m)')
-    parser.add_argument('--combined-buffer', type=float, default=100, help='두 선의 버퍼 반경 합계(m)')
+    parser.add_argument('--route-buffer', type=float, default=3.76, help='각 FAF–IAF 경로의 3D 버퍼 반경(m)')
+    parser.add_argument('--ring-buffer', type=float, default=0, help='비교 대상 내곽의 버퍼 반경(m)')
+    parser.add_argument('--reference-layer', default='내곽', help='비교할 내곽 SHP 이름(확장자 제외)')
+    parser.add_argument('--iaf-height-ft', type=float, default=2000, help='분석할 IAF 끝점의 Z(ft)')
+    parser.add_argument('--all-routes', action='store_true', help='1500ft IAF 연결 경로도 포함')
     args = parser.parse_args()
     if not np.isfinite(args.contact_tolerance) or args.contact_tolerance <= 0:
         raise ValueError('접촉 허용 거리는 0보다 큰 유한한 수여야 합니다.')
-    if not np.isfinite(args.combined_buffer) or args.combined_buffer < 0:
-        raise ValueError('합산 버퍼는 0 이상의 유한한 수여야 합니다.')
+    if any(not np.isfinite(v) or v < 0 for v in (args.route_buffer, args.ring_buffer)):
+        raise ValueError('버퍼 반경은 0 이상의 유한한 수여야 합니다.')
+    if not np.isfinite(args.iaf_height_ft) or args.iaf_height_ft <= 0:
+        raise ValueError('IAF 고도는 양의 유한한 수여야 합니다.')
+    combined_buffer = args.route_buffer + args.ring_buffer
     base = args.input_dir.resolve()
     output = args.output_dir or base / '생성파일' / OUTPUT_NAME
-    reference = gpd.read_file(base / '내곽_2000.shp')
+    reference = gpd.read_file(base / f'{args.reference_layer}.shp')
     if len(reference) != 1 or reference.crs is None:
-        raise ValueError('내곽_2000은 좌표계가 있는 단일 닫힌 선이어야 합니다.')
+        raise ValueError('기준 내곽은 좌표계가 있는 단일 닫힌 선이어야 합니다.')
     reference = reference.to_crs(5186)
-    xyz = coordinates(reference.geometry.iloc[0], '내곽_2000')
+    xyz = coordinates(reference.geometry.iloc[0], args.reference_layer)
     ring = force_2d(reference.geometry.iloc[0])
     if not ring.is_ring or np.ptp(xyz[:, 2]) > 1e-6:
-        raise ValueError('내곽_2000은 고도가 일정한 단순 폐합 선이어야 합니다.')
+        raise ValueError('기준 내곽은 고도가 일정한 단순 폐합 선이어야 합니다.')
     height = float(xyz[0, 2])
     routes = []
+    sources = {}
     for layer in NAMES:
-        frame = gpd.read_file(base / f'{layer}.shp')
+        path = base / f'{layer}.shp'
+        if not path.exists():
+            path = base / f'{LEGACY_NAMES[layer]}.shp'
+        sources[layer] = path.name
+        frame = gpd.read_file(path)
         if frame.empty or frame.crs is None:
             raise ValueError(f'{layer}: 좌표계와 피처가 필요합니다.')
         frame = frame.to_crs(5186)
+        count_before = len(routes)
         for number, (_, row) in enumerate(frame.iterrows(), 1):
-            routes.append(analyze_route(row, layer, number, ring, height, args.contact_tolerance))
+            route_xyz = coordinates(row.geometry, f'{layer} 행 {number}')
+            iaf_z = max(route_xyz[0, 2], route_xyz[-1, 2])
+            if not args.all_routes and not np.isclose(iaf_z, args.iaf_height_ft * .3048, atol=.01, rtol=0):
+                continue
+            result = analyze_route(row, layer, number, ring, height, args.contact_tolerance,
+                                   args.route_buffer, args.ring_buffer)
+            result['summary']['source_file'] = path.name
+            routes.append(result)
+        if len(routes) == count_before:
+            raise ValueError(f'{path.name}: 조건에 맞는 IAF 경로가 없습니다.')
     for route in routes:
-        analyze_buffer(route, xyz, args.combined_buffer)
+        analyze_buffer(route, xyz, combined_buffer)
     # 계산을 모두 완료한 후 출력 폴더를 생성한다.
     output.mkdir(parents=True, exist_ok=True)
+    # 이전 산출물을 덮어쓰기 전에 보존한다.
+    previous = [p for p in output.iterdir() if p.is_file()]
+    if previous:
+        backup = output / 'previous_runs' / datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        backup.mkdir(parents=True)
+        for path in previous:
+            shutil.copy2(path, backup / path.name)
     summary = pd.DataFrame([r['summary'] for r in routes])
     summary.to_csv(output / '경로별_간격요약.csv', index=False, encoding='utf-8-sig')
     pd.DataFrame([c for r in routes for c in r['contacts']]).to_csv(
@@ -318,8 +365,25 @@ def main():
     buffer_summary.to_csv(output / '3D_버퍼겹침_경로별판정.csv', index=False, encoding='utf-8-sig')
     pd.DataFrame([s for r in routes for s in r['buffer_segments']]).to_csv(
         output / '3D_버퍼겹침_선분별판정.csv', index=False, encoding='utf-8-sig')
-    plot_buffer(routes, ring, args.combined_buffer, output)
-    text = (f'내곽_2000의 실제 Z: {height:.6f} m ({height / .3048:.3f} ft)\n'
+    plot_buffer(routes, ring, combined_buffer, output)
+    contact_rows = [c for r in routes for c in r['contacts']]
+    crossings = pd.DataFrame([c for c in contact_rows if c['crossing_role'] == 'interior_crossing'])
+    crossings.to_csv(output / 'FAF_외곽IAF_내곽통과_기체여유.csv', index=False, encoding='utf-8-sig')
+    # Shapely buffer는 XY 폴리곤만 생성한다. 수직/3D 판정은 위 계산 결과를 사용한다.
+    buffer_rows = [dict(**r['base'], radius_m=args.route_buffer,
+                        geometry=r['line'].buffer(args.route_buffer)) for r in routes]
+    gpd.GeoDataFrame(buffer_rows, crs=5186).to_file(
+        output / 'FAF_IAF_3_76m_XY버퍼.gpkg', layer='route_xy_buffer', driver='GPKG')
+    text = (f'{args.reference_layer}.shp의 실제 Z: {height:.6f} m ({height / .3048:.3f} ft)\n'
+            f'입력 파일 대응: {sources}\n'
+            f'IAF 선택: {"모든 경로" if args.all_routes else str(args.iaf_height_ft) + "ft 끝점 연결 경로"}\n'
+            '저장 방향과 무관하게 낮은 FAF → 높은 IAF 순서로 분석한다.\n'
+            f'경로 반경={args.route_buffer:g}m, 내곽 반경={args.ring_buffer:g}m.\n'
+            '요청한 3.76m를 중심선 양쪽 반경으로 적용한다. 기체 전체 높이의 절반을 적용한 모델이 아니다.\n'
+            '교차점 기체 하단/상단 = 경로 Z ± 경로 반경.\n'
+            'vertical_clearance_m = |경로 Z - 내곽 Z| - 경로 반경 - 내곽 반경. 음수는 버퍼 겹침.\n'
+            'FAF_외곽IAF_내곽통과_기체여유.csv는 경로 중간 통과점만 포함하며 끝점 접속은 제외한다.\n'
+            'XY버퍼.gpkg는 지도 표시용 2D 폴리곤이며 Z/3D 버퍼가 아니다.\n'
             f'끝점 접촉 허용 거리: {args.contact_tolerance:g} m\n'
             'signed_gap_m = 경로 Z − 내곽 Z. 양수는 위, 음수는 아래.\n'
             'absolute_gap_m은 높이 간격의 크기이다.\n'
@@ -330,7 +394,7 @@ def main():
             '전체 PNG의 막대는 각 경로의 여러 접점 중 최소 |ΔZ|를 표시한다.\n'
             '모든 접점의 간격은 개별 경로 PNG와 교차접점 CSV에 기록한다.\n'
             'feature_row는 1부터 시작하는 행 번호. 원본 id는 중복될 수 있다.\n'
-            f'3D 버퍼 판정은 두 선의 합산 반경 {args.combined_buffer:g}m를 사용한다. 각 선에 100m씩 적용하지 않는다.\n'
+            f'3D 버퍼 판정은 두 선의 합산 반경 {combined_buffer:g}m를 사용한다.\n'
             '경로와 내곽 경계를 구성하는 모든 3D 직선 선분 쌍의 최단거리를 계산한다.\n'
             'buffer_overlap=True는 3D 최단거리 <= 합산 반경 (수치 허용오차 1e-8m).\n'
             '연결을 의도한 끝점도 제외하지 않는다. 의도된 접속 여부는 별도 검토가 필요하다.\n'
@@ -344,7 +408,11 @@ def main():
     print(buffer_summary.groupby('layer').agg(overlap_routes=('buffer_overlap', 'sum'),
                                              min_3d_m=('min_distance_3d_m', 'min'),
                                              max_3d_m=('min_distance_3d_m', 'max')).to_string())
-    print(f'CSV 5개, PNG 4개, 분석설명 저장 완료: {output.resolve()}')
+    if not crossings.empty:
+        print(crossings.groupby('layer').agg(crossings=('contact_no', 'count'),
+              min_vertical_gap_m=('absolute_gap_m', 'min'),
+              min_clearance_m=('vertical_clearance_m', 'min')).to_string())
+    print(f'CSV 6개, PNG 4개, XY 버퍼 GPKG, 분석설명 저장 완료: {output.resolve()}')
 
 
 if __name__ == '__main__':
