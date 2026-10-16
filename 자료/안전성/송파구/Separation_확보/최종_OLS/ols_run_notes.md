@@ -1,0 +1,34 @@
+# 후보 건물별 최종 OLS 선정
+- 원본 4398개 → 소유 건물별 고유 후보 2199개. 후보 건물 8개, 원본 VP 16개.
+- 선정 표면 16개. 2개 선정 건물 8개.
+- 건물 간 쌍별 중첩 면적 합: 2788326.498 → 187636.462m² (93.27% 감소).
+- 3D 표면 교차/접촉 쌍 수: 1 → 3. XY 면적이 목적함수이며 3D 교차 수는 최소화하지 않았다.
+- 기존 독립 선정과 동일한 건물별 배정수 및 최상위 판정 조합을 유지. 중첩 우선으로 같은 판정 안의 결측 개수/여유고는 달라질 수 있음.
+- 건물별 원본 VP 관계, 원본 Polygon→대표 Polygon은 GPKG 표와 CSV에 보존.
+- 실선 PASS, 점선 REVIEW, 붉은색 FAIL. CONDITIONAL_REVIEW/UNSAFE_CANDIDATE는 승인된 안전 표면이 아님.
+- 기존 host_index에 따른 소유관계를 유지했으나 현재 footprint까지 거리와 기존 기록 거리가 다르므로 후보 건물 매핑은 추가 확인 대상.
+- 이전 실행 파일은 previous_runs, 원본 후보 백업은 input_backup에 보관.
+
+- workflow: c:\Users\choih\Desktop\연구\Landing_Depature_Process\코드\polygon\Vertiport_Final_OLS_Selection_Workflow.md
+- building_input: C:\Users\choih\Desktop\연구\Landing_Depature_Process\자료\안전성\송파구\송파구_건물_수정_update.shp
+- dem: C:\Users\choih\Desktop\연구\Landing_Depature_Process\자료\안전성\송파구\송파구_DEM.tif
+- owner_definition: generation_summary.csv의 기존 host_index로 8개 후보 건물 그룹; 원본 16 VP 관계 보존. 현재 footprint와 기록된 host 거리 차이를 별도 검토 표기
+- dedup: 동일 소유자/중심/설계 및 normalize(Polygon Z) 완전일치. 반올림 없음. 1cm 이내 유사 형상은 near_duplicate 플래그만 표시. 서로 다른 소유자 관계 유지; 공유 형상 계산 캐시 및 지도 전용 중복제거
+- design: 원본 길이 1000m/끝단573m/시작0m/경사8도 유지. 문서 8:1은 예시. 진북 기준 시계방향
+- height: DEM+AGL 동일 기준으로 비교. 입력 DEM의 AMSL 수직 datum은 독립 검증되지 않았음
+- obstacle_policy: A16 AGL; 결측/0/음수 및 DEM 결측은 UNKNOWN. A17 자동 대체/host 제외 없음
+- contact: 침범 <-1e-06 FAIL; ±1e-06m 접촉은 REVIEW; 나머지 결측 중첩 REVIEW; 모두 없으면 PASS
+- selection: 건물별 최대 배정수 및 PASS/PASS > PASS/REVIEW > REVIEW/REVIEW 최상위 조합 고정, FAIL 포함 쌍 제외. 다음 건물 간 총 XY 중첩 면적 합 최소화. 면적 동률이면 기존 결측/접촉/여유고 순서. 단일 FAIL은 최소 침범량·침범수까지 먼저 고정
+- overlap_objective: 서로 다른 건물의 선정 표면 쌍별 XY 교차면적 합(m²). 각 쌍 한 번 계산; 다중 중첩은 쌍별로 가산. 면적 없는 경계 접촉은 목적함수 0. union 면적은 별도 보조지표
+- overlap_optimizer: {"starts": 16, "max_sweeps": 60, "seed": 20261016, "local_optimum_verified": true, "baseline_overlap_sum_m2": 2788326.4976490205, "optimized_overlap_sum_m2": 187636.461900993}
+- overlap_method: 전체 허용 조합 보존, 고정 seed 16개 시작점(기본값)의 건물 단위 좌표 하강. 다른 건물 고정 시 해당 건물 모든 허용 쌍 탐색. 개선 불가능한 국소해 검증. 전역 최소 보장은 없음
+- overlap_height_audit: 중첩 영역 모든 꼭짓점에서 두 선형 표면의 높이차 범위 및 최소 절대높이차 계산. 부호가 바뀌거나 0에 닿으면 3D 표면 교차/접촉. 높이차로 XY 면적을 할인하지 않음. 최소 운항 분리 기준 적용 없음
+- no_overlap: min_clearance NULL은 교차한 유효 건물 없음; PASS 후보 비교에서 제한 장애물 없음(+infinity)으로 취급
+- fallback: 기존 후보가 없는 소유자만 360개 생성. 생성 실패는 NO_GEOMETRY. 기존 자료는 선행 필터된 후보이며 모든 360방향을 새로 검색한 결과가 아님
+- uncertainty: 부분 교차 전체 꼭짓점 높이 최솟값 사용; 지형/운항/측면 이격은 선정 조건 아님. 건물 간 표면 중첩은 공동 목적함수에 포함
+- input_raw_count: 4398
+- owner_unique_count: 2199
+- evaluated_geometry_count: 2199
+- candidate_building_count: 8
+- source_vp_count: 16
+- created_utc: 2026-10-16T06:47:55.333790+00:00
