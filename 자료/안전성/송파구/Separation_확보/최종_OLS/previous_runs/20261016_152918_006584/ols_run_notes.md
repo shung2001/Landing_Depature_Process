@@ -1,0 +1,27 @@
+# 후보 건물별 최종 OLS 선정
+- 원본 4398개 → 소유 건물별 고유 후보 2199개. 후보 건물 8개, 원본 VP 16개.
+- 선정 표면 16개. 2개 선정 건물 8개.
+- 건물별 원본 VP 관계, 원본 Polygon→대표 Polygon은 GPKG 표와 CSV에 보존.
+- 실선 PASS, 점선 REVIEW, 붉은색 FAIL. CONDITIONAL_REVIEW/UNSAFE_CANDIDATE는 승인된 안전 표면이 아님.
+- 기존 host_index에 따른 소유관계를 유지했으나 현재 footprint까지 거리와 기존 기록 거리가 다르므로 후보 건물 매핑은 추가 확인 대상.
+- 이전 실행 파일은 previous_runs, 원본 후보 백업은 input_backup에 보관.
+
+- workflow: C:\Users\choih\Desktop\연구\Landing_Depature_Process\코드\polygon\Vertiport_Final_OLS_Selection_Workflow.md
+- building_input: C:\Users\choih\Desktop\연구\Landing_Depature_Process\자료\안전성\송파구\송파구_건물_수정_update.shp
+- dem: C:\Users\choih\Desktop\연구\Landing_Depature_Process\자료\안전성\송파구\송파구_DEM.tif
+- owner_definition: generation_summary.csv의 기존 host_index로 8개 후보 건물 그룹; 원본 16 VP 관계 보존. 현재 footprint와 기록된 host 거리 차이를 별도 검토 표기
+- dedup: 동일 소유자/중심/설계 및 normalize(Polygon Z) 완전일치. 반올림 없음. 서로 다른 소유자 관계 유지; 공유 형상 계산 캐시 및 지도 전용 중복제거
+- design: 원본 길이 1000m/끝단573m/시작0m/경사8도 유지. 문서 8:1은 예시. 진북 기준 시계방향
+- height: DEM+AGL 동일 기준으로 비교. 입력 DEM의 AMSL 수직 datum은 독립 검증되지 않았음
+- obstacle_policy: A16 AGL; 결측/0/음수 및 DEM 결측은 UNKNOWN. A17 자동 대체/host 제외 없음
+- contact: 침범 <-1e-06 FAIL; ±1e-06m 접촉은 REVIEW; 나머지 결측 중첩 REVIEW; 모두 없으면 PASS
+- selection: PASS/PASS > PASS/REVIEW > REVIEW/REVIEW; FAIL 포함 쌍 제외. 쌍 내 결측합/접촉합 최소, 최소여유 최대, 최대여유 최대, 각도차 최대, 작은 각도 우선. 단일 FAIL은 최악침범 최소→침범수 최소
+- no_overlap: min_clearance NULL은 교차한 유효 건물 없음; PASS 후보 비교에서 제한 장애물 없음(+infinity)으로 취급
+- fallback: 기존 후보가 없는 소유자만 360개 생성. 생성 실패는 NO_GEOMETRY. 기존 자료는 선행 필터된 후보이며 모든 360방향을 새로 검색한 결과가 아님
+- uncertainty: 부분 교차 전체 꼭짓점 높이 최솟값 사용; 지형/운항/측면 이격/표면간 중첩은 선정 조건 아님
+- input_raw_count: 4398
+- owner_unique_count: 2199
+- evaluated_geometry_count: 2199
+- candidate_building_count: 8
+- source_vp_count: 16
+- created_utc: 2026-10-16T06:27:51.804127+00:00

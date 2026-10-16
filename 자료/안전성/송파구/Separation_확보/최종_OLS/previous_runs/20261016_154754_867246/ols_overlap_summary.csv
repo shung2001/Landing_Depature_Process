@@ -1,0 +1,3 @@
+﻿stage,overlap_sum_m2,overlap_pair_count,crossing_pair_count,overlap_union_m2
+independent_baseline,2788326.4976490205,23,1,1245171.6356261086
+overlap_optimized,187636.461900993,21,3,182656.11392981323
