@@ -27,7 +27,7 @@ def main():
         net = Network(options)
         for rep in range(options['replicates']):
             seed = options['seed'] + rep
-            requests = demand(net, options, selected['arrival_demand_per_h'], seed)
+            requests = demand(net, options, summary['selected']['target_arrivals_per_h'], seed)
             metrics, *_ = simulate(net, options, requests,
                 (int(selected['outer_capacity']), int(selected['inner_capacity'])),
                 selected['separation_m'], selected['scenario'], seed)

@@ -1,0 +1,5 @@
+﻿terminal,holding_id,capacity,radius,straight,speed,type,nominal_lap_s
+인천,1,2,884.0,500.0,90.0,Racetrack,141.56232854312645
+용인_성남_수원,2,2,884.0,500.0,90.0,Racetrack,141.56232854312645
+강원,4,2,884.0,500.0,90.0,Racetrack,141.56232854312645
+김포,3,2,884.0,500.0,90.0,Racetrack,141.56232854312645

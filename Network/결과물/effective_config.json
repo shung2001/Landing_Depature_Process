@@ -12,6 +12,8 @@
     1000
   ],
   "arrival_rates_per_hour": [
+    5,
+    10,
     15,
     30,
     45,

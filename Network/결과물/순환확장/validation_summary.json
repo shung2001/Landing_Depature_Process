@@ -1,0 +1,28 @@
+{
+  "ring_cases": 352,
+  "continuous_feed_cases": 240,
+  "preload_passed": 74,
+  "overload_or_spacing_rejected": 38,
+  "full_OD_stress_cases": 16,
+  "additional_balanced_OD_cases": 10,
+  "all_accepted_spacing_valid": true,
+  "all_buffer_violations": 0,
+  "coordinates_times_speed_limits_valid": true,
+  "exports": {
+    "kepler_ring_flow": {
+      "rows": 157631,
+      "aircraft": 225,
+      "trip_segments": 225
+    },
+    "kepler_OD_flow": {
+      "rows": 27788,
+      "aircraft": 98,
+      "trip_segments": 98
+    },
+    "kepler_best_throughput_flow": {
+      "rows": 1295,
+      "aircraft": 15,
+      "trip_segments": 26
+    }
+  }
+}

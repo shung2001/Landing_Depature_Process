@@ -2,10 +2,12 @@
 import sys
 sys.dont_write_bytecode = True
 import json
+import copy
 from pathlib import Path
 import unittest
 import numpy as np
-from network_capacity import Network, demand, simulate, swept_distances
+from network_capacity import (Network, demand, simulate, swept_distances, validate_config,
+                              capacity_scenarios, capacity_expansion_history)
 
 
 class CapacityChecks(unittest.TestCase):
@@ -74,6 +76,45 @@ class CapacityChecks(unittest.TestCase):
             if np.isfinite(state['departure_s']):
                 self.assertTrue(np.isfinite(state['landed_s']))
                 self.assertGreaterEqual(state['departure_s'] - state['landed_s'], config['turnaround_s'])
+
+    def test_replay_preserves_integer_demand(self):
+        config = dict(self.config, duration_s=1200)
+        original = demand(self.net, config, 18, 42)
+        # 6 * 3600 / 1200 is exact, while this nextafter value deliberately
+        # represents the downward floating-point error of a stored realised rate.
+        realised = np.nextafter(len(original) * 3600 / config['duration_s'], 0)
+        replay = demand(self.net, config, realised, 42, count=len(original))
+        self.assertEqual(original, replay)
+
+    def test_invalid_measurement_and_separation_inputs(self):
+        for change in (dict(step_s=0), dict(warmup_s=self.config['duration_s']),
+                       dict(separations_m=[50]), dict(separations_m=[1001]),
+                       dict(capacity_checkpoints=[28, 14])):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate_config(dict(self.config, **change))
+        cfg = copy.deepcopy(self.config)
+        cfg['speed_defaults_kts']['접근'] = float('nan')
+        with self.assertRaises(ValueError):
+            validate_config(cfg)
+
+    def test_incremental_expansion_and_geometric_spacing(self):
+        history = capacity_expansion_history(self.net, self.config)
+        for sep in self.config['separations_m']:
+            rows = [r for r in history if r['separation_m'] == sep]
+            for a, b in zip(rows, rows[1:]):
+                self.assertEqual((b['outer'] - a['outer']) + (b['inner'] - a['inner']), 1)
+        for row in capacity_scenarios(self.net, self.config):
+            self.assertGreaterEqual(row['outer_uniform_chord_m'], row['separation_m'])
+            self.assertGreaterEqual(row['inner_uniform_chord_m'], row['separation_m'])
+
+    def test_pad_reserved_before_final_zone_prevents_circular_wait(self):
+        metrics, _, states, _, _ = simulate(self.net, self.config,
+            demand(self.net, self.config, 15, 20261019), (14, 14), 100, 'pad_regression', 20261019)
+        # This sequence previously stopped after ten landings: an inbound
+        # aircraft owned the departure's zone while waiting for its occupied pad.
+        self.assertGreater(sum(np.isfinite(s['landed_s']) for s in states), 10)
+        self.assertEqual(metrics['buffer_violations'], 0)
+        self.assertGreaterEqual(metrics['min_ring_swept_separation_m'], 100 - 1e-6)
 
 
 if __name__ == '__main__':

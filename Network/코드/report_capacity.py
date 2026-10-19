@@ -1,4 +1,5 @@
 """Produce the Korean analysis report and audit/visual artifacts from completed runs."""
+import argparse
 import sys
 sys.dont_write_bytecode = True
 import hashlib
@@ -10,11 +11,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from shapely.geometry import LineString, Point
 from shapely import get_coordinates
-from network_capacity import Network, ROOT, OUTPUT, configure_plot, csv, plots
+from network_capacity import Network, ROOT, OUTPUT, configure_plot, csv, plots, capacity_expansion_history
 
 
 def main():
-    out = OUTPUT
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, default=OUTPUT)
+    out = parser.parse_args().output
     cfg = json.loads((out / 'effective_config.json').read_text(encoding='utf-8'))
     summary = json.loads((out / 'summary.json').read_text(encoding='utf-8'))
     runs = pd.read_csv(out / 'capacity_results.csv')
@@ -42,23 +45,7 @@ def main():
                 source_manifest.append(dict(path=str(path.relative_to(ROOT)), bytes=path.stat().st_size,
                                             sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
     csv(source_manifest, out / 'source_manifest.csv')
-    # The random sequence that grows one of the rings by one aircraft per step.
-    rng, expansions = np.random.default_rng(cfg['seed']), []
-    for sep in cfg['separations_m']:
-        radii = np.array(net.ring_lengths) / (2 * math.pi)
-        limits = np.floor(math.pi / np.arcsin(sep / (2 * radii))).astype(int)
-        caps = np.minimum([14, 14], limits)
-        step = 0
-        expansions.append(dict(separation_m=sep, step=step, changed='initial', outer=int(caps[0]), inner=int(caps[1])))
-        for target in cfg['capacity_checkpoints'] + [int(max(limits))]:
-            while min(caps) < target and np.any(caps < limits):
-                choices = np.flatnonzero(caps < np.minimum(limits, target))
-                if not len(choices):
-                    break
-                which = int(rng.choice(choices)); caps[which] += 1; step += 1
-                expansions.append(dict(separation_m=sep, step=step, changed='outer' if which == 0 else 'inner',
-                                       outer=int(caps[0]), inner=int(caps[1])))
-    csv(expansions, out / 'capacity_expansion_history.csv')
+    csv(capacity_expansion_history(net, cfg), out / 'capacity_expansion_history.csv')
     holding_rows = []
     for name, hid in net.holding_for.items():
         h = net.holdings[hid]
@@ -88,7 +75,7 @@ def main():
             arrival = net.paths[('arrival', name, fid)]
             # Under the implemented policy the pad is claimed before the final
             # corridor. These are minimum occupancies without any traffic delay.
-            pad_load[fid] += weight * ((len(arrival['xyz']) - 1 - max(0, arrival['last_ring'] - 4)) * cfg['step_s']
+            pad_load[fid] += weight * ((len(arrival['xyz']) - 1 - arrival['pad_gate']) * cfg['step_s']
                                        + cfg['turnaround_s'] + 100 / (cfg['speed_defaults_kts']['Short_Final'] * 1852 / 3600))
     resource_bounds = [dict(resource=f'crossing_{i}', type='crossing', expected_occupancy_s_per_arrival=x,
                             capacity=1, arrival_rate_upper_bound_per_h=3600 / x)
@@ -147,7 +134,8 @@ def main():
                 nearest_aircraft_id=int(ids[j]), chord_distance_m=distances[i, j],
                 ring_arc_distance_m=min(delta, curve.length - delta),
                 required_distance_m=selection['separation_m']))
-    spacing = pd.DataFrame(spacing_rows)
+    spacing = pd.DataFrame(spacing_rows, columns=['time_s', 'ring', 'occupancy', 'aircraft_id',
+        'nearest_aircraft_id', 'chord_distance_m', 'ring_arc_distance_m', 'required_distance_m'])
     spacing.to_csv(out / 'selected_spacing.csv', index=False, encoding='utf-8-sig')
     if len(spacing):
         assert (spacing.chord_distance_m >= spacing.required_distance_m - 1e-6).all()
@@ -158,6 +146,12 @@ def main():
         ax.axhline(selection['separation_m'], color='red', ls='--', label='요구 분리거리')
         ax.set_xlabel('시간 (분)'); ax.set_ylabel('링 내 가장 가까운 기체 중심 간 거리 (m)')
         ax.set_title('선정 조건의 실제 링 간격 · 10초 표본'); ax.grid(alpha=.2); ax.legend()
+        fig.tight_layout(); fig.savefig(out / 'selected_spacing.png', dpi=180); plt.close(fig)
+    else:
+        fig, ax = plt.subplots(figsize=(10, 3))
+        ax.text(.5, .5, '선정 조건의 10초 표본에 같은 링의 기체 쌍이 없습니다.\n실제 링 간격 통계를 산출하지 않습니다.',
+                ha='center', va='center', transform=ax.transAxes)
+        ax.set_axis_off()
         fig.tight_layout(); fig.savefig(out / 'selected_spacing.png', dpi=180); plt.close(fig)
     stage = od[(od.scenario == selection['scenario']) &
                np.isclose(od.demand_per_h, round(selection['arrival_demand_per_h'])) &
@@ -198,22 +192,30 @@ def main():
                  minimum_observed_swept_distance_m=float(runs.min_swept_separation_m.min()),
                  all_outer_occupancy_within_capacity=bool((runs.peak_outer <= runs.outer_capacity).all()),
                  all_inner_occupancy_within_capacity=bool((runs.peak_inner <= runs.inner_capacity).all()),
-                 both_replicates_stable_scenario_count=int(aggregate.stable_all_replicates.sum()),
+                 all_swept_ring_spacing_valid=bool((runs.min_ring_swept_separation_m.isna() |
+                     (runs.min_ring_swept_separation_m >= runs.separation_m - 1e-6)).all()),
+                 all_replicates_stable_scenario_count=int(aggregate.stable_all_replicates.sum()),
                  stable_peak_airborne=stable_peak)
     (out / 'validation_summary.json').write_text(json.dumps(proof, ensure_ascii=False, indent=2), encoding='utf-8')
     assert proof['buffer_violation_count'] == 0
     assert proof['all_outer_occupancy_within_capacity'] and proof['all_inner_occupancy_within_capacity']
+    assert proof['all_swept_ring_spacing_valid']
     lines = [
         '# 네트워크 용량 분석', '',
         '## 결과 해석', '',
+        ('- **선정 상태: 시험 범위 내 안정 조건 확인.**' if len(stable_all) else
+         '- **선정 상태: 안정 조건 없음. 아래 선정 조건은 진단용이며 최대 운영 용량으로 해석할 수 없다.**'),
         f'- 분석 네트워크: 노드 {len(net.nodes)}개, 방향성 링크 {len(net.edges)}개, 도착·출발 OD {len(net.paths)}개 모두 연결됨.',
         f'- 실험: {len(scenarios)}개 분리거리·링 용량 조합 × {len(cfg["arrival_rates_per_hour"])}개 수요 × {cfg["replicates"]}개 난수 시드 = {len(runs)}개 조건.',
         f'- 1회 {cfg["duration_s"]/60:.0f}분, 앞 {cfg["warmup_s"]/60:.0f}분 제외. 시간 간격 {cfg["step_s"]}초.',
-        f'- 두 반복 모두 안정 기준을 만족한 조건 수: {len(stable_all)}개.',
+        f'- 모든 반복이 안정 기준을 만족한 조건 수: {len(stable_all)}개.',
         f'- 선정 조건: {selection["scenario"]}, 도착 수요 {selection["arrival_demand_per_h"]:.2f}대/h.',
+        f'- 추적 대상으로 선정한 단일 반복의 완료율 판정 표본은 {summary["selected"]["mature_aircraft"]}대이다. '
+        '작은 표본의 안정 판정은 장시간·다수 반복 실험으로 보강해야 한다.',
         f'- 선정 조건의 평균 착륙+이륙 처리량: **{selection["movements_mean_per_h"]:.1f}회/h** '
         f'(반복 범위 {selection["movements_min_per_h"]:.1f}~{selection["movements_max_per_h"]:.1f}회/h).',
-        f'- 선정 조건의 동시 체공 관측 최댓값: **{selection["peak_airborne_max"]:.0f}대**. 모든 안정 조건에서의 관측 최댓값: {stable_peak}대.',
+        f'- 선정 조건의 동시 체공 관측 최댓값: **{selection["peak_airborne_max"]:.0f}대**. '
+        + (f'모든 안정 조건에서의 관측 최댓값: {stable_peak}대.' if stable_peak is not None else '안정 조건의 체공 최댓값은 산출하지 못했다.'),
         f'- 전체 조건의 동시 체공 최댓값 {summary["max_observed_airborne"]}대는 혼잡·정체 조건을 포함하므로 운영 가능한 용량으로 해석하면 안 된다.',
         f'- 고정 OD 확률과 자유비행 점유시간에서 계산한 평균 자원부하 상한: '
         f'{selected_bound.arrival_rate_upper_bound_per_h:.1f}도착/h '
@@ -223,6 +225,9 @@ def main():
         '| 링 분리거리(m) | 가장 높은 검증 수요(대/h) | 평균 처리량(회/h) | 해당 조건 체공 최고(대) | 다음 시험 수요(대/h) |',
         '|---:|---:|---:|---:|---:|']
     for _, row in bounds.iterrows():
+        if pd.isna(row.largest_tested_stable_arrivals_per_h):
+            lines.append(f'| {row.separation_m:g} | 안정 조건 없음 | — | — | — |')
+            continue
         lines.append(f'| {row.separation_m:g} | {row.largest_tested_stable_arrivals_per_h:.2f} | '
                      f'{row.movements_mean_per_h:.1f} | {row.airborne_peak_in_stable_runs:g} | {row.next_tested_arrivals_per_h:.2f} |')
     lines += ['', '수요는 정수 대수로 생성하므로 15대/h 입력이 90분 동안 22대(14.67대/h)처럼 소폭 절삭될 수 있다. '
@@ -238,7 +243,7 @@ def main():
               '같은 교차의 선진입 예약은 선점하지 않는다. 새 경합에는 착륙 최종접근, 링 진입, 기존 항로 순으로 우선권을 주고 동률은 네트워크 진입 시각을 적용한다.',
               '7. 교차 예약은 충돌 회피를 위한 보수적 제어 가정이다. 안전거리가 충족되어도 동시에 진입하지 못하는 경우가 있어 처리량을 낮출 수 있다. '
               '예약·분리 조건이 막히면 기체는 현재 위치에서 정지한다. 이러한 공중 정지는 속도/가속도/최소선회반경을 갖춘 비행역학 모델로 재검증해야 한다.',
-              '8. 각 버티포트 용량 1. 최종 진입 전에 패드를 확보하고 도착 후 20초 호버링을 완료한 뒤 착륙한다. '
+              '8. 각 버티포트 용량 1. 최종접근에 필요한 교차구간의 첫 예약 전에 패드를 함께 확보해 착륙장-교차구간 간 순환 대기를 방지한다. 도착 후 20초 호버링을 완료한 뒤 착륙한다. '
               f'착륙 후 {cfg["turnaround_s"]}초 점유를 가정하고 이륙한다. 출발 기체가 패드에서 100m 이상 벗어나면 다음 패드 예약을 허용한다.',
               '9. 지상에 있는 기체는 패드 용량으로 관리하며 공중 50m 구 충돌 검사에는 포함하지 않는다. 같은 고도의 가까운 패드 간 동시 비행은 공중 거리 검사 대상이다.',
               '10. Holding은 가장 가까운 접근 시작점에 연결한 유한 대기열(각 Capacity=2, 총 8대)로 반영했다. 초과 수요는 외부 대기열에 남는다. '
@@ -281,6 +286,10 @@ def main():
               '- source_manifest.csv, input_audit.csv, conflict_corridors.csv, holding_parameters.csv, destination_priorities.csv: 데이터·모델 근거.',
               '- resource_upper_bounds.csv: 고정 OD 혼합·최소 점유시간으로 계산한 자원별 장기 평균 도착률 상한.',
               '- 검증/ 폴더: 짧은 기능 시험 결과로, 본 분석 결과와 구분한다.']
+    if (out / '순환확장/순환분석보고서.md').exists():
+        lines[2:2] = ['**추가 순환 실험:** 이 문서의 체공 관측값은 안정 왕복 조건의 통계이며 '
+                      '링 자체의 최대 순환 대수가 아니다. 계속 생성·진입시키는 확장 실험은 '
+                      '[순환분석보고서](순환확장/순환분석보고서.md)에서 확인한다.', '']
     (out / '분석보고서.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     print(json.dumps(proof, ensure_ascii=False, indent=2))
     print(bounds.to_string(index=False))

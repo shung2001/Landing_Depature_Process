@@ -47,8 +47,49 @@ def csv(rows, path):
     pd.DataFrame(rows).to_csv(path, index=False, encoding='utf-8-sig')
 
 
+def json_text(value):
+    """Use JSON null for unobserved statistics, including numpy scalars."""
+    def clean(item):
+        if isinstance(item, dict):
+            return {k: clean(v) for k, v in item.items()}
+        if isinstance(item, (list, tuple)):
+            return [clean(v) for v in item]
+        if isinstance(item, np.generic):
+            item = item.item()
+        if isinstance(item, float) and not math.isfinite(item):
+            return None
+        return item
+    return json.dumps(clean(value), ensure_ascii=False, indent=2, allow_nan=False)
+
+
 def length(xyz):
     return np.r_[0., np.cumsum(np.linalg.norm(np.diff(xyz, axis=0), axis=1))]
+
+
+def validate_config(cfg):
+    """Reject inputs that silently invalidate spacing or measurement windows."""
+    for key in ('duration_s', 'step_s', 'aircraft_buffer_m', 'destination_distance_scale_m'):
+        if not math.isfinite(cfg[key]) or cfg[key] <= 0:
+            raise ValueError(f'{key} must be finite and positive')
+    if not 0 <= cfg['warmup_s'] < cfg['duration_s']:
+        raise ValueError('warmup_s must be within the simulation horizon')
+    for key in ('hover_s', 'turnaround_s'):
+        if not math.isfinite(cfg[key]) or cfg[key] < 0:
+            raise ValueError(f'{key} must be finite and nonnegative')
+    if cfg['replicates'] < 1 or int(cfg['replicates']) != cfg['replicates']:
+        raise ValueError('replicates must be a positive integer')
+    for key in ('arrival_rates_per_hour', 'capacity_checkpoints', 'separations_m'):
+        if not cfg[key] or any(not math.isfinite(v) or v <= 0 for v in cfg[key]):
+            raise ValueError(f'{key} must contain positive finite values')
+    if any(not 2 * cfg['aircraft_buffer_m'] <= s <= 1000 for s in cfg['separations_m']):
+        raise ValueError('separations_m must be between twice aircraft_buffer_m and 1000 m')
+    if cfg['capacity_checkpoints'] != sorted(set(cfg['capacity_checkpoints'])) or any(
+            int(v) != v or v < 14 for v in cfg['capacity_checkpoints']):
+        raise ValueError('capacity_checkpoints must be increasing integers >= 14')
+    for layer in (*LINES, *RINGS):
+        speed = cfg['speed_defaults_kts'].get(layer, math.nan)
+        if not math.isfinite(speed) or speed <= 0:
+            raise ValueError(f'{layer}: finite positive default speed required')
 
 
 @dataclass
@@ -70,6 +111,7 @@ class Edge:
 
 class Network:
     def __init__(self, config, source=SOURCE):
+        validate_config(config)
         self.config = config
         self.source = source
         self.frames, self.audit, self.nodes, self.edges = {}, [], [], []
@@ -199,6 +241,29 @@ class Network:
             for fid, port in self.ports.items():
                 for kind, start, end in [('arrival', terminal, port), ('departure', port, terminal)]:
                     path = self.shortest(start, end)
+                    if kind == 'arrival':
+                        extra = config.get('arrival_extra_ring_laps', 0)
+                        if int(extra) != extra or extra < 0:
+                            raise ValueError('arrival_extra_ring_laps must be a nonnegative integer')
+                        if extra:
+                            expanded, visited = [], set()
+                            for eid in path:
+                                edge = self.edges[eid]
+                                if edge.ring >= 0 and edge.ring not in visited:
+                                    visited.add(edge.ring)
+                                    cycle, node = [], edge.u
+                                    while True:
+                                        ring_edge = next(e for e in self.adj[node]
+                                                         if self.edges[e].ring == edge.ring)
+                                        cycle.append(ring_edge)
+                                        node = self.edges[ring_edge].v
+                                        if node == edge.u:
+                                            break
+                                        if len(cycle) > len(self.edges):
+                                            raise ValueError('Ring is not a closed directed cycle')
+                                    expanded.extend(cycle * int(extra))
+                                expanded.append(eid)
+                            path = expanded
                     key = (kind, name, fid)
                     self.paths[key] = self.sample(path, hover=kind == 'arrival')
                     self.route_rows.append(dict(kind=kind, terminal=name, fid=fid,
@@ -228,6 +293,18 @@ class Network:
             route['merge_claims'] = {end: frozenset().union(*(
                 route['claims'][i] for i in np.flatnonzero(route['merge_end'] == end)))
                 for end in route['merge_trees']}
+            # Acquire the pad before any zone needed by the final leg. Otherwise
+            # an inbound aircraft can own the zone needed by the pad's departure,
+            # while itself waiting for that departure to vacate the pad.
+            final_zones = frozenset().union(*route['claims'][route['last_ring'] + 1:])
+            gate = route['last_ring'] + 1
+            for i, claim in enumerate(route['claims']):
+                if route['merge'][i] >= 0 and route['ring'][i] < 0:
+                    claim = claim | route['merge_claims'][int(route['merge_end'][i])]
+                if claim & final_zones:
+                    gate = min(gate, i)
+                    break
+            route['pad_gate'] = max(0, gate)
 
     def closest_node(self, point):
         distances = np.linalg.norm(np.asarray(self.nodes) - point, axis=1)
@@ -259,7 +336,7 @@ class Network:
             if col.lower() in ('speed', 'speed_kts', 'speed_kt', 'speed_knot') and pd.notna(record[col]):
                 speed, source = float(record[col]), col + '_assumed_kts'
                 break
-        if speed <= 0:
+        if not math.isfinite(speed) or speed <= 0:
             raise ValueError('Speed must be positive')
         edge = Edge(len(self.edges), u, v, xyz, layer, int(row), speed, source, ring)
         self.edges.append(edge)
@@ -355,7 +432,7 @@ class Network:
                 'last_ring': max((i for i, r in enumerate(rings) if r >= 0), default=-1)}
 
 
-def demand(network, config, rate, seed):
+def demand(network, config, rate, seed, count=None):
     """Exact 30/30/30/10 proportions in every shuffled block of ten arrivals."""
     rng = np.random.default_rng(seed)
     names = list(network.terminals)
@@ -366,7 +443,8 @@ def demand(network, config, rate, seed):
     distances = np.array([np.linalg.norm(network.nodes[network.ports[f]][:2] - p1[:2]) for f in fids])
     priorities = np.exp(-distances / config['destination_distance_scale_m'])
     priorities /= priorities.sum()
-    count = int(rate * config['duration_s'] / 3600)
+    # Replay uses the original integer count; realised rate can round down again.
+    count = int(rate * config['duration_s'] / 3600) if count is None else int(count)
     # Stratified random times; no accidental Poisson variation between capacity scenarios.
     times = (np.arange(count) + rng.random(count)) * config['duration_s'] / max(count, 1)
     blocks = []
@@ -413,12 +491,17 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
     events, tracks, history = [], [], []
     landing_times, exit_times, takeoff_times, delays = [], [], [], []
     aircraft_state = {r['aircraft_id']: dict(r, admitted_s=math.nan, landed_s=math.nan,
-                      departure_s=math.nan, exited_s=math.nan, air_wait_s=0) for r in requests}
+                      departure_s=math.nan, exited_s=math.nan, air_wait_s=0,
+                      outer_distance_m=0., inner_distance_m=0.) for r in requests}
     blocks = defaultdict(int)
     peak_active = peak_total = 0
     peak_ring = [0, 0]
     min_distance = math.inf
+    min_ring_distance = math.inf
     arrivals_in_measurement = 0
+    peak_ring_moving = [0, 0]
+    ring_moving_steps, ring_occupied_steps = [0, 0], [0, 0]
+    seconds_ten_moving = [0., 0.]
 
     def log(t, a, event):
         if detail:
@@ -483,6 +566,9 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
                 candidates.append((1, ready, 'departure', fid, r, route))
         for _, _, phase, source, r, route in sorted(candidates, key=lambda x: (x[0], x[1], x[4]['aircraft_id'])):
             claim = route['claims'][0]
+            needs_pad = phase == 'arrival' and route['pad_gate'] == 0
+            if needs_pad and r['destination_fid'] in pad_lock:
+                continue
             if any(resource in reservations and reservations[resource] != r['aircraft_id'] for resource in claim):
                 continue
             if active and min(np.linalg.norm(route['xyz'][0] - a.route['xyz'][a.index]) for a in active) < threshold:
@@ -501,11 +587,14 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
                 if t >= warmup:
                     arrivals_in_measurement += 1
             a = Aircraft(r, route, phase, t)
+            if needs_pad:
+                pad_lock[r['destination_fid']] = r['aircraft_id']
             for resource in claim:
                 reservations[resource] = r['aircraft_id']
             active.append(a)
             log(t, a, 'admitted' if phase == 'arrival' else 'takeoff')
         n = len(active)
+        moving_count = [0, 0]
         ring_count = [sum(a.route['ring'][a.index] == ri for a in active) for ri in (0, 1)]
         if n:
             old = np.array([a.route['xyz'][a.index] for a in active])
@@ -562,8 +651,7 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
                     continue
                 # Reserve the landing pad at the start of the final corridor,
                 # so an arrival never occupies a corridor while awaiting takeoff.
-                last_ring = a.route['last_ring']
-                terminal_entry = a.phase == 'arrival' and last_ring >= 0 and nxt > last_ring - 5
+                terminal_entry = a.phase == 'arrival' and nxt >= a.route['pad_gate']
                 if terminal_entry and fid in pad_lock and pad_lock[fid] != aid:
                     blocks['pad'] += 1
                     a.last_block = 'pad:' + str(pad_lock[fid])
@@ -608,7 +696,21 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
                 min_distance = min(min_distance, float(d.min()))
                 if np.any(d < threshold - 1e-6):
                     raise AssertionError(f'Buffer overlap at t={t}, aircraft {active[i].request["aircraft_id"]}')
+                same = (((current_ring[i + 1:] == current_ring[i]) & (current_ring[i] >= 0)) |
+                        ((new_ring[i + 1:] == new_ring[i]) & (new_ring[i] >= 0)))
+                if same.any():
+                    min_ring_distance = min(min_ring_distance, float(d[same].min()))
+                    if np.any(d[same] < separation - 1e-6):
+                        raise AssertionError(f'Ring spacing violation at t={t}')
             for i, a in enumerate(active):
+                ri = int(current_ring[i])
+                if ri >= 0:
+                    ring_occupied_steps[ri] += 1
+                    if moves[i] and np.linalg.norm(proposed[i] - old[i]) > 1e-8:
+                        moving_count[ri] += 1
+                        ring_moving_steps[ri] += 1
+                        field = 'outer_distance_m' if ri == 0 else 'inner_distance_m'
+                        aircraft_state[a.request['aircraft_id']][field] += float(np.linalg.norm(proposed[i] - old[i]))
                 if moves[i]:
                     a.index += 1
                     keep = a.route['claims'][a.index]
@@ -627,8 +729,13 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
         peak_active = max(peak_active, n)
         peak_total = max(peak_total, n + len(ground) + sum(map(len, holding.values())))
         peak_ring = [max(peak_ring[i], ring_count[i]) for i in (0, 1)]
+        for ri in (0, 1):
+            peak_ring_moving[ri] = max(peak_ring_moving[ri], moving_count[ri])
+            if moving_count[ri] >= 10:
+                seconds_ten_moving[ri] += dt
         if tick % 10 == 0:
             history.append(dict(time_s=t, airborne=n, outer=ring_count[0], inner=ring_count[1],
+                outer_moving=moving_count[0], inner_moving=moving_count[1],
                 grounded=len(ground), holding=sum(map(len, holding.values())),
                 external_queue=sum(map(len, pending.values())),
                 total_backlog=request_cursor - len(landing_times),
@@ -665,11 +772,18 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
         movements_per_h=(arrivals + departures) / hours,
         peak_airborne=peak_active, peak_system_including_holding_ground=peak_total,
         peak_outer=peak_ring[0], peak_inner=peak_ring[1],
+        peak_moving_outer=peak_ring_moving[0], peak_moving_inner=peak_ring_moving[1],
+        outer_seconds_at_least_10_moving=seconds_ten_moving[0],
+        inner_seconds_at_least_10_moving=seconds_ten_moving[1],
+        outer_motion_fraction=ring_moving_steps[0] / max(1, ring_occupied_steps[0]),
+        inner_motion_fraction=ring_moving_steps[1] / max(1, ring_occupied_steps[1]),
         end_external_queue=int(history.iloc[-1].external_queue), end_backlog=int(history.iloc[-1].total_backlog),
         completion_fraction=completion, queue_growth_per_h=growth,
         mean_delay_s=float(np.mean(ds)) if ds else math.nan,
         p95_delay_s=float(np.percentile(ds, 95)) if ds else math.nan,
         min_swept_separation_m=min_distance if np.isfinite(min_distance) else math.nan,
+        min_ring_swept_separation_m=min_ring_distance if np.isfinite(min_ring_distance) else math.nan,
+        mature_aircraft=len(mature), completed_mature_aircraft=completed,
         buffer_violations=0, blocked_pad_steps=blocks['pad'],
         blocked_reservation_steps=blocks['corridor_reservation'],
         blocked_merge_steps=blocks['merge_gap'] + blocks['merge_priority'],
@@ -679,15 +793,17 @@ def simulate(net, cfg, requests, caps, separation, scenario, seed, detail=False)
     return metrics, history, list(aircraft_state.values()), tracks, events
 
 
-def capacity_scenarios(net, cfg):
+def capacity_expansion_history(net, cfg):
     rng = np.random.default_rng(cfg['seed'])
     rows = []
     for separation in cfg['separations_m']:
         radii = np.array(net.ring_lengths) / (2 * math.pi)
         maximum = np.floor(math.pi / np.arcsin(separation / (2 * radii))).astype(int)
         cap = np.minimum([14, 14], maximum)
-        saved = set()
-        targets = list(cfg['capacity_checkpoints']) + [int(max(maximum))]
+        step = 0
+        rows.append(dict(separation_m=separation, step=step, changed='initial',
+                         outer=int(cap[0]), inner=int(cap[1])))
+        targets = sorted(set([14, *cfg['capacity_checkpoints'], int(max(maximum))]))
         for target in targets:
             # Random increments are reproducible and never exceed geometric packing.
             while min(cap) < target and np.any(cap < maximum):
@@ -696,6 +812,23 @@ def capacity_scenarios(net, cfg):
                     break
                 ri = int(rng.choice(choices))
                 cap[ri] += 1
+                step += 1
+                rows.append(dict(separation_m=separation, step=step,
+                    changed='outer' if ri == 0 else 'inner', outer=int(cap[0]), inner=int(cap[1])))
+    return rows
+
+
+def capacity_scenarios(net, cfg):
+    rows = []
+    history = capacity_expansion_history(net, cfg)
+    for separation in cfg['separations_m']:
+        radii = np.array(net.ring_lengths) / (2 * math.pi)
+        maximum = np.floor(math.pi / np.arcsin(separation / (2 * radii))).astype(int)
+        saved = set()
+        for target in sorted(set([14, *cfg['capacity_checkpoints'], int(max(maximum))])):
+            state = next(r for r in history if r['separation_m'] == separation and
+                         r['outer'] >= min(target, maximum[0]) and r['inner'] >= min(target, maximum[1]))
+            cap = np.array([state['outer'], state['inner']])
             pair = tuple(map(int, cap))
             if pair in saved:
                 continue
@@ -703,7 +836,9 @@ def capacity_scenarios(net, cfg):
             rows.append(dict(scenario=f'S{separation}_O{pair[0]}_I{pair[1]}', separation_m=separation,
                 outer_capacity=pair[0], inner_capacity=pair[1],
                 outer_geometric_max=int(maximum[0]), inner_geometric_max=int(maximum[1]),
-                outer_mean_spacing_m=net.ring_lengths[0] / pair[0], inner_mean_spacing_m=net.ring_lengths[1] / pair[1]))
+                outer_mean_spacing_m=net.ring_lengths[0] / pair[0], inner_mean_spacing_m=net.ring_lengths[1] / pair[1],
+                outer_uniform_chord_m=2 * radii[0] * math.sin(math.pi / pair[0]),
+                inner_uniform_chord_m=2 * radii[1] * math.sin(math.pi / pair[1])))
     return rows
 
 
@@ -739,6 +874,7 @@ def run_batch(job):
             if metrics['blocked_ring_steps'] == 0:
                 cached = (dict(metrics), states)
         batch.append((metrics, states, rate))
+        metrics['target_arrivals_per_h'] = rate
     return batch
 
 
@@ -778,14 +914,19 @@ def plots(net, results, scenarios, history, out):
     ax3.set_zlabel('원본 고도 (m)'); ax3.set_xlabel('동서 (km)'); ax3.set_ylabel('남북 (km)')
     ax3.set_title('3D 연결 · XY 교차를 접속점으로 처리하지 않음')
     fig.tight_layout(); fig.savefig(out / 'network_3d.png', dpi=180, bbox_inches='tight'); plt.close(fig)
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    for sep, ax in zip(sorted(results.separation_m.unique()), axes.flat):
+    separations = sorted(results.separation_m.unique())
+    columns = min(2, len(separations))
+    fig, axes = plt.subplots(math.ceil(len(separations) / columns), columns,
+                             figsize=(7 * columns, 5 * math.ceil(len(separations) / columns)), squeeze=False)
+    for ax in axes.flat[len(separations):]:
+        ax.set_visible(False)
+    for sep, ax in zip(separations, axes.flat):
         for scenario, data in results[results.separation_m == sep].groupby('scenario'):
             grouped = data.groupby('arrival_demand_per_h').movements_per_h.agg(['mean', 'min', 'max'])
             ax.plot(grouped.index, grouped['mean'], marker='o', ms=4, label=scenario.split('_', 1)[1])
             ax.fill_between(grouped.index, grouped['min'], grouped['max'], alpha=.12)
         ax.set_title(f'링 분리거리 {sep:g} m')
-        ax.set_xlabel('요구 도착량 (대/h)'); ax.set_ylabel('착륙+출항 완료 (회/h)'); ax.grid(alpha=.2); ax.legend(fontsize=8)
+        ax.set_xlabel('요구 도착량 (대/h)'); ax.set_ylabel('착륙+이륙 (회/h)'); ax.grid(alpha=.2); ax.legend(fontsize=8)
     fig.suptitle('수요·링 용량별 처리량 (밴드: 반복 실행 최솟값~최댓값)', fontsize=16)
     fig.tight_layout(); fig.savefig(out / 'capacity_comparison.png', dpi=180); plt.close(fig)
     fig, axes = plt.subplots(3, 1, figsize=(13, 10), sharex=True)
@@ -815,6 +956,7 @@ def main():
     if args.quick:
         cfg.update(duration_s=1200, warmup_s=120, replicates=1,
                    separations_m=[100], capacity_checkpoints=[14], arrival_rates_per_hour=[30, 90])
+    validate_config(cfg)
     args.output.mkdir(parents=True, exist_ok=True)
     net = Network(cfg)
     csv(net.audit, args.output / 'input_audit.csv')
@@ -831,6 +973,7 @@ def main():
     if args.quick:
         scenarios = scenarios[:1]
     csv(scenarios, args.output / 'capacity_scenarios.csv')
+    csv(capacity_expansion_history(net, cfg), args.output / 'capacity_expansion_history.csv')
     (args.output / 'effective_config.json').write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
     results, od_rows = [], []
     total = len(scenarios) * len(cfg['arrival_rates_per_hour']) * cfg['replicates']
@@ -860,8 +1003,18 @@ def main():
             futures = [pool.submit(run_batch, job) for job in jobs]
             for future in as_completed(futures):
                 collect(future.result())
-    csv(od_rows, args.output / 'OD.csv')
+    od = pd.DataFrame(od_rows)
+    inbound = od.movement == 'arrival'
+    od['movement_ready_s'] = np.where(inbound, od.requested_s, od.landed_s + cfg['turnaround_s'])
+    od['movement_started_s'] = np.where(inbound, od.admitted_s, od.departure_s)
+    od['movement_finished_s'] = np.where(inbound, od.landed_s, od.exited_s)
+    od['movement_status'] = np.where(od.movement_finished_s.notna(), 'completed',
+        np.where(od.movement_started_s.notna(), 'in_progress',
+                 np.where(od.movement_ready_s.notna(), 'waiting', 'awaiting_landing')))
+    od.to_csv(args.output / 'OD.csv', index=False, encoding='utf-8-sig')
     results = pd.DataFrame(results)
+    results = results.sort_values(['separation_m', 'outer_capacity', 'inner_capacity', 'target_arrivals_per_h', 'seed'])
+    results.to_csv(args.output / 'capacity_results.csv', index=False, encoding='utf-8-sig')
     grouped = results.groupby(['scenario', 'separation_m', 'outer_capacity', 'inner_capacity', 'arrival_demand_per_h'])
     aggregate = grouped.agg(stable_all_replicates=('stable', 'all'),
         stable_replicates=('stable', 'sum'), movements_mean_per_h=('movements_per_h', 'mean'),
@@ -874,7 +1027,8 @@ def main():
         ['movements_mean_per_h', 'p95_delay_worst_s'], ascending=[False, True]).iloc[0]
     selected = results[(results.scenario == chosen.scenario) &
                        (results.arrival_demand_per_h == chosen.arrival_demand_per_h)].sort_values('seed').iloc[0]
-    requests = demand(net, cfg, selected.arrival_demand_per_h, int(selected.seed))
+    requests = demand(net, cfg, selected.target_arrivals_per_h, int(selected.seed),
+                      count=int(selected.requested_arrivals))
     _, history, states, tracks, events = simulate(net, cfg, requests,
         (int(selected.outer_capacity), int(selected.inner_capacity)), selected.separation_m,
         selected.scenario, int(selected.seed), detail=True)
@@ -882,13 +1036,16 @@ def main():
     csv(tracks, args.output / 'selected_trajectories.csv')
     csv(events, args.output / 'selected_events.csv')
     plots(net, results, scenarios, history, args.output)
-    summary = dict(selected=selected.to_dict(), selected_aggregate=chosen.to_dict(),
+    summary = dict(selection_status='stable_tested' if len(viable) else 'diagnostic_only_no_stable_condition',
+                   selected=selected.to_dict(), selected_aggregate=chosen.to_dict(),
+                   max_tested_stable_arrivals_per_h=float(viable.arrival_demand_per_h.max()) if len(viable) else None,
+                   max_stable_observed_airborne=int(viable.peak_airborne_max.max()) if len(viable) else None,
                    runs=len(results), reachable_ODs=len(net.paths),
                    max_observed_airborne=int(results.peak_airborne.max()),
                    max_observed_movements_per_h=float(results.movements_per_h.max()),
                    stable_runs=int(results.stable.sum()))
-    (args.output / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
+    (args.output / 'summary.json').write_text(json_text(summary), encoding='utf-8')
+    print(json_text(summary), flush=True)
 
 
 if __name__ == '__main__':

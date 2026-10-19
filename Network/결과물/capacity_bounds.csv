@@ -1,0 +1,5 @@
+﻿separation_m,largest_tested_stable_arrivals_per_h,movements_mean_per_h,scenario,airborne_peak_in_stable_runs,next_tested_arrivals_per_h,next_rate_any_stable
+100,4.666666666666667,9.0,S100_O56_I56,2,10.0,False
+250,4.666666666666667,9.0,S250_O70_I50,2,10.0,False
+500,4.666666666666667,9.0,S500_O35_I25,2,10.0,False
+1000,4.666666666666667,9.0,S1000_O17_I12,2,10.0,False

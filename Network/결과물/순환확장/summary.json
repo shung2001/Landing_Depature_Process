@@ -1,0 +1,142 @@
+{
+  "ring_experiments": 352,
+  "full_OD_experiments": 16,
+  "selected_feed": {
+    "separation_m": 100,
+    "rate_per_h": 720,
+    "seed": 20261020,
+    "mode": "weighted_entries",
+    "sustained": 223,
+    "peak": 225
+  },
+  "selected_ring_metrics": [
+    {
+      "ring": "외곽_2800",
+      "scenario": "weighted_entries_S100.0_C175_R720_seed20261020",
+      "separation_m": 100.0,
+      "capacity": 175,
+      "rate_per_h": 720,
+      "seed": 20261020,
+      "mode": "weighted_entries",
+      "generated": 720,
+      "admitted": 129,
+      "peak_moving": 129,
+      "tail_min_moving": 127,
+      "seconds_at_least_10_moving": 3551.0,
+      "completed_laps": 1033,
+      "end_queue": 591,
+      "min_swept_m": 102.33732673677015,
+      "buffer_violations": 0
+    },
+    {
+      "ring": "내곽_2000",
+      "scenario": "weighted_entries_S100.0_C125_R720_seed20261020",
+      "separation_m": 100.0,
+      "capacity": 125,
+      "rate_per_h": 720,
+      "seed": 20261020,
+      "mode": "weighted_entries",
+      "generated": 720,
+      "admitted": 96,
+      "peak_moving": 96,
+      "tail_min_moving": 96,
+      "seconds_at_least_10_moving": 3551.0,
+      "completed_laps": 1135,
+      "end_queue": 624,
+      "min_swept_m": 103.48946406008072,
+      "buffer_violations": 0
+    }
+  ],
+  "selected_full_OD": {
+    "scenario": "OD_laps2_R360_O14_I14",
+    "seed": 20261019,
+    "rate": 360,
+    "caps": [
+      14,
+      14
+    ],
+    "extra_laps": 2,
+    "metrics": {
+      "scenario": "OD_laps2_R360_O14_I14",
+      "seed": 20261019,
+      "separation_m": 100,
+      "outer_capacity": 14,
+      "inner_capacity": 14,
+      "requested_arrivals": 360,
+      "arrival_demand_per_h": 360.0,
+      "landings_per_h": 0.0,
+      "departures_per_h": 0.0,
+      "external_exits_per_h": 0.0,
+      "movements_per_h": 0.0,
+      "peak_airborne": 98,
+      "peak_system_including_holding_ground": 106,
+      "peak_outer": 9,
+      "peak_inner": 5,
+      "peak_moving_outer": 4,
+      "peak_moving_inner": 3,
+      "outer_seconds_at_least_10_moving": 0.0,
+      "inner_seconds_at_least_10_moving": 0.0,
+      "outer_motion_fraction": 0.016922574322116954,
+      "inner_motion_fraction": 0.03631787126932758,
+      "end_external_queue": 254,
+      "end_backlog": 360,
+      "completion_fraction": 0.0,
+      "queue_growth_per_h": 360.00000000000017,
+      "mean_delay_s": null,
+      "p95_delay_s": null,
+      "min_swept_separation_m": 134.6265306964208,
+      "min_ring_swept_separation_m": 134.6265306964208,
+      "mature_aircraft": 180,
+      "completed_mature_aircraft": 0,
+      "buffer_violations": 0,
+      "blocked_pad_steps": 9810,
+      "blocked_reservation_steps": 30016,
+      "blocked_merge_steps": 6,
+      "blocked_ring_steps": 0,
+      "blocked_separation_steps": 231807,
+      "stable": false
+    }
+  },
+  "preload_max": [
+    {
+      "ring": "내곽_2000",
+      "separation_m": 100,
+      "count": 125
+    },
+    {
+      "ring": "내곽_2000",
+      "separation_m": 250,
+      "count": 50
+    },
+    {
+      "ring": "내곽_2000",
+      "separation_m": 500,
+      "count": 25
+    },
+    {
+      "ring": "내곽_2000",
+      "separation_m": 1000,
+      "count": 12
+    },
+    {
+      "ring": "외곽_2800",
+      "separation_m": 100,
+      "count": 175
+    },
+    {
+      "ring": "외곽_2800",
+      "separation_m": 250,
+      "count": 70
+    },
+    {
+      "ring": "외곽_2800",
+      "separation_m": 500,
+      "count": 35
+    },
+    {
+      "ring": "외곽_2800",
+      "separation_m": 1000,
+      "count": 17
+    }
+  ]
+}

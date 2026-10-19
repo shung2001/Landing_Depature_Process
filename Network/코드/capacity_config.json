@@ -6,7 +6,7 @@
   "step_s": 1,
   "aircraft_buffer_m": 50,
   "separations_m": [100, 250, 500, 1000],
-  "arrival_rates_per_hour": [15, 30, 45, 60, 90, 120, 180, 240, 360],
+  "arrival_rates_per_hour": [5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360],
   "capacity_checkpoints": [14, 28, 56],
   "hover_s": 20,
   "turnaround_s": 60,

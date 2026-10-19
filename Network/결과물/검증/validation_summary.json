@@ -1,0 +1,10 @@
+{
+  "all_od_reachable": true,
+  "buffer_violation_count": 0,
+  "minimum_observed_swept_distance_m": 134.6222068182669,
+  "all_outer_occupancy_within_capacity": true,
+  "all_inner_occupancy_within_capacity": true,
+  "all_swept_ring_spacing_valid": true,
+  "all_replicates_stable_scenario_count": 0,
+  "stable_peak_airborne": null
+}

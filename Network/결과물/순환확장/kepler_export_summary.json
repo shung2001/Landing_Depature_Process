@@ -1,0 +1,60 @@
+{
+  "selection_objective": "highest_tested_shortest_route_landing_takeoff_throughput",
+  "selected": {
+    "scenario": "OD_laps0_R15_O14_I14",
+    "seed": 20261020,
+    "separation_m": 100,
+    "outer_capacity": 14,
+    "inner_capacity": 14,
+    "requested_arrivals": 15,
+    "arrival_demand_per_h": 15.0,
+    "landings_per_h": 12.0,
+    "departures_per_h": 13.2,
+    "external_exits_per_h": 10.799999999999999,
+    "movements_per_h": 25.2,
+    "peak_airborne": 6,
+    "peak_system_including_holding_ground": 6,
+    "peak_outer": 2,
+    "peak_inner": 4,
+    "peak_moving_outer": 2,
+    "peak_moving_inner": 3,
+    "outer_seconds_at_least_10_moving": 0.0,
+    "inner_seconds_at_least_10_moving": 0.0,
+    "outer_motion_fraction": 0.30804863925883036,
+    "inner_motion_fraction": 0.40230274297324753,
+    "end_external_queue": 0,
+    "end_backlog": 4,
+    "completion_fraction": 0.875,
+    "queue_growth_per_h": 3.759442036478849,
+    "mean_delay_s": 461.46881826575617,
+    "p95_delay_s": 840.6509165073184,
+    "min_swept_separation_m": 120.74413941596617,
+    "min_ring_swept_separation_m": 134.63160158555374,
+    "mature_aircraft": 8,
+    "completed_mature_aircraft": 7,
+    "buffer_violations": 0,
+    "blocked_pad_steps": 871,
+    "blocked_reservation_steps": 3956,
+    "blocked_merge_steps": 0,
+    "blocked_ring_steps": 0,
+    "blocked_separation_steps": 990,
+    "stable": false
+  },
+  "exports": {
+    "kepler_ring_flow": {
+      "rows": 157631,
+      "aircraft": 225,
+      "trip_segments": 225
+    },
+    "kepler_OD_flow": {
+      "rows": 27788,
+      "aircraft": 98,
+      "trip_segments": 98
+    },
+    "kepler_best_throughput_flow": {
+      "rows": 1295,
+      "aircraft": 15,
+      "trip_segments": 26
+    }
+  }
+}

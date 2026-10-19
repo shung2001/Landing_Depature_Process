@@ -1,2 +1,2 @@
-﻿scenario,separation_m,outer_capacity,inner_capacity,outer_geometric_max,inner_geometric_max,outer_mean_spacing_m,inner_mean_spacing_m
-S100_O14_I14,100,14,14,175,125,1256.6369322431026,897.5978087450723
+﻿scenario,separation_m,outer_capacity,inner_capacity,outer_geometric_max,inner_geometric_max,outer_mean_spacing_m,inner_mean_spacing_m,outer_uniform_chord_m,inner_uniform_chord_m
+S100_O14_I14,100,14,14,175,125,1256.6369322431026,897.5978087450723,1246.117102044073,890.0836443171937
