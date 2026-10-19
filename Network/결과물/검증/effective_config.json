@@ -1,0 +1,35 @@
+{
+  "seed": 20261019,
+  "replicates": 1,
+  "duration_s": 1200,
+  "warmup_s": 120,
+  "step_s": 1,
+  "aircraft_buffer_m": 50,
+  "separations_m": [
+    100
+  ],
+  "arrival_rates_per_hour": [
+    30,
+    90
+  ],
+  "capacity_checkpoints": [
+    14
+  ],
+  "hover_s": 20,
+  "turnaround_s": 60,
+  "destination_distance_scale_m": 500,
+  "speed_defaults_kts": {
+    "접근": 90,
+    "Expert_Off": 90,
+    "외곽_2800": 90,
+    "내곽_2000": 90,
+    "Interchange_In": 60,
+    "Interchange_out": 60,
+    "IAF_FAF_In_Update": 60,
+    "IAF_FAF_Out_Update": 60,
+    "Short_Final": 30
+  },
+  "stable_completion_fraction": 0.95,
+  "stable_p95_delay_s": 300,
+  "stable_queue_growth_per_hour": 2
+}

@@ -1,0 +1,17 @@
+﻿layer,features,original_crs,fields,geometry
+접근_start,4,EPSG:5186,id|Name|Altitude|geometry,Point
+각_건물의_최종_버티포트,8,EPSG:5186,fid|building_i|source_vp_|host_sourc|raw_candid|unique_can|generated_|pass_count|review_cou|fail_count|selected_c|rank1_poly|rank1_azim|rank1_stat|rank2_poly|rank2_azim|rank2_stat|pair_angle|pair_statu|review_rea|current_ho|source_hos|baseline_a|baseline_o|selected_o|geometry,Point
+FAF,16,EPSG:5186,id|x_5186|y_5186|alt|geometry,MultiPoint
+외곽_IAF_Interchange,14,EPSG:5186,fid|building_i|source_vp_|center_x|center_y|z0_dem_agl|min_cleara|limiting_b|unknown__1|altitude|spacing|geometry,Point
+내곽_Interchange,14,EPSG:4326,id|geometry,Point
+내곽_IAF,10,EPSG:5186,fid|building_i|source_vp_|center_x|center_y|altitude|spacing|geometry,Point
+Holding_point,4,EPSG:5186,id|Altitude|Capacity|Type|Radius|뱅크각|Speed_kts|straight|geometry,Point
+접근,4,EPSG:5186,id|Name|geometry,LineString
+Expert_Off,4,EPSG:5186,id|geometry,LineString
+Interchange_In,14,EPSG:5186,source_id|distance_m|radius_m|geometry,LineString
+Interchange_out,14,EPSG:5186,source_id|distance_m|radius_m|geometry,LineString
+IAF_FAF_In_Update,11,EPSG:5186,id|geometry,LineString
+IAF_FAF_Out_Update,11,EPSG:5186,id|geometry,LineString
+Short_Final,16,EPSG:5186,id|geometry,LineString
+외곽_2800,1,EPSG:5186,fid|building_i|source_vp_|polygon_id|source_row|source_fil|azimuth_de|center_x|center_y|z0_dem_agl|slope_deg|length_m|start_widt|end_width_|surface_mo|z_ref|generated|near_dupli|near_dup_1|result|intersecti|known_pene|touching_b|unknown_bu|min_cleara|limiting_b|unknown__1|penetratio|touching_1|status|penetrat_1|unknown_co|worst_pene|surface_id|overlap_wi|overlap_ot|selected_r|selection_|pair_angle|pair_statu|revalidate|source_v_1|altitude|spacing|geometry,LineString
+내곽_2000,1,EPSG:5186,fid|building_i|source_vp_|polygon_id|source_row|source_fil|azimuth_de|center_x|center_y|z0_dem_agl|slope_deg|length_m|start_widt|intersecti|min_cleara|limiting_b|unknown__1|overlap_wi|overlap_ot|selected_r|selection_|altitude|spacing|geometry,LineString

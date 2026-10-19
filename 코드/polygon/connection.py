@@ -4,6 +4,9 @@
 실행: python 코드/polygon/connection.py
 고도 변경: python 코드/polygon/connection.py --inner-z 457.2 --outer-z 609.6
 검토만 수행: 위 명령에 --dry-run 추가.
+최종정리 Short_Final 갱신: python 코드/polygon/connection.py --short-final
+Short_Final 모드는 FAF/버티포트의 XYZ와 최종OLS 대응 관계로 기존 파일을
+갱신한다. 누락 연결을 보완하며 별도 출력/백업 파일을 생성하지 않는다.
 
 고도는 같은 수직 기준의 미터 값이어야 한다. DEM/AGL/해발고도 변환은 하지 않는다.
 기본 고도는 사용자가 지정한 내곽 457.2m, 외곽 609.6m이다.
@@ -13,6 +16,7 @@
 """
 
 import argparse
+import io
 from contextlib import ExitStack, contextmanager
 from datetime import datetime
 import math
@@ -69,12 +73,15 @@ def open_reader(path, geometry_only=False):
         raise shapefile.ShapefileException(f'{path}: {error}') from error
 
 
-def load_points(path, target_crs, override=None, field=None):
+def load_points(path, target_crs, override=None, field=None, allow_multipoint=False):
     """점 순서/id에 의존하지 않고 매칭할 수 있도록 동일한 평면 좌표계로 변환."""
     transform = Transformer.from_crs(read_crs(path), target_crs, always_xy=True)
     result = []
     with open_reader(path) as reader:
-        if reader.shapeType not in (shapefile.POINT, shapefile.POINTZ):
+        accepted = (shapefile.POINT, shapefile.POINTZ)
+        if allow_multipoint:
+            accepted += (shapefile.MULTIPOINT, shapefile.MULTIPOINTZ)
+        if reader.shapeType not in accepted:
             raise ValueError(f'{path.name}: Point 또는 PointZ 자료가 필요합니다.')
         if field and field not in [f[0] for f in reader.fields[1:]]:
             raise ValueError(f'{path.name}: 고도 필드 {field!r}가 없습니다.')
@@ -89,7 +96,7 @@ def load_points(path, target_crs, override=None, field=None):
                 z = override
             elif field:
                 z = item.record[field]
-            elif shape.shapeType == shapefile.POINTZ:
+            elif shape.shapeType in (shapefile.POINTZ, shapefile.MULTIPOINTZ):
                 z = shape.z[0]
             else:
                 raise ValueError(f'{label}: Z가 없습니다. 고도 값 또는 고도 필드를 지정하세요.')
@@ -231,7 +238,8 @@ def update(directory, inner_z=None, outer_z=None, inner_z_field=None,
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--directory', type=Path, default=DIRECTORY)
+    parser.add_argument('--directory', type=Path, default=None)
+    parser.add_argument('--short-final', action='store_true', help='최종정리의 Short_Final을 3D 연결선으로 제자리 갱신')
     for group in ('inner', 'outer'):
         selection = parser.add_mutually_exclusive_group()
         selection.add_argument(f'--{group}-z', type=float, help='모든 점에 적용할 고도(m)')
@@ -240,9 +248,148 @@ def main():
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
     try:
-        update(**vars(args))
+        options = vars(args).copy()
+        short_final = options.pop('short_final')
+        options['directory'] = options['directory'] or (
+            ROOT / '자료/최종정리' if short_final else DIRECTORY)
+        if short_final:
+            if any(options[name] is not None for name in
+                   ('inner_z', 'outer_z', 'inner_z_field', 'outer_z_field')):
+                raise ValueError('Short_Final은 원본 점의 Z를 사용합니다. 내곽/외곽 고도 옵션을 제거하세요.')
+            update_short_final(options['directory'], options['tolerance'], options['dry_run'])
+        else:
+            update(**options)
     except (ValueError, OSError, shapefile.ShapefileException) as error:
         parser.exit(1, f'오류: {error}\n')
+
+
+def update_short_final(directory, tolerance=0.01, dry_run=False):
+    """원본 점 XYZ를 정확히 잇고, 메모리 검증/복원으로 기존 파일만 갱신."""
+    directory = Path(directory).resolve()
+    path = directory / 'Short_Final.shp'
+    tolerance = finite(tolerance, 'tolerance')
+    if tolerance <= 0:
+        raise ValueError('허용 거리는 0보다 커야 합니다.')
+    crs = read_crs(path)
+    if not crs.is_projected or any(a.unit_conversion_factor != 1 for a in crs.axis_info[:2]):
+        raise ValueError('Short_Final은 미터 단위 투영 좌표계여야 합니다.')
+    faf = load_points(directory / 'FAF.shp', crs, allow_multipoint=True)
+    ports = load_points(directory / '각_건물의_최종_버티포트.shp', crs)
+
+    def unique_match(point, candidates, label, xyz=False):
+        matches = [i for i, candidate in enumerate(candidates)
+                   if math.dist(point if xyz else point[:2],
+                                candidate if xyz else candidate[:2]) <= tolerance]
+        if len(matches) != 1:
+            raise ValueError(f'{label}: 대응점 {len(matches)}개 (1개 필요).')
+        return matches[0]
+
+    # 가장 가까운 건물로 추정하지 않고 각 FAF를 생성한 OLS의 저점으로 대응.
+    ols_path = directory / '최종OLS.shp'
+    transform = Transformer.from_crs(read_crs(ols_path), crs, always_xy=True)
+    targets = {}
+    with open_reader(ols_path) as reader:
+        for i, shape in enumerate(reader.iterShapes()):
+            if shape.shapeType != shapefile.POLYGONZ or list(shape.parts) != [0]:
+                raise ValueError(f'OLS {i}: 단일 PolygonZ가 필요합니다.')
+            vertices = [(*transform.transform(*xy), finite(z, f'OLS {i} Z'))
+                        for xy, z in zip(shape.points, shape.z)]
+            if vertices[-1] == vertices[0]:
+                vertices.pop()
+            if len(vertices) != 3:
+                raise ValueError(f'OLS {i}: 삼각형이 필요합니다.')
+            vertices.sort(key=lambda p: p[2])
+            low, upper1, upper2 = vertices
+            midpoint = tuple((a + b) / 2 for a, b in zip(upper1, upper2))
+            fi = unique_match(midpoint, faf, f'OLS {i} FAF', xyz=True)
+            vi = unique_match(low, ports, f'OLS {i} 버티포트', xyz=True)
+            if fi in targets:
+                raise ValueError(f'FAF {fi}: 중복 OLS 대응입니다.')
+            targets[fi] = vi
+    if set(targets) != set(range(len(faf))):
+        raise ValueError('모든 FAF에 대응하는 OLS가 필요합니다.')
+
+    with open_reader(path) as reader:
+        fields = reader.fields[1:]
+        records = [list(record) for record in reader.records()]
+        shapes = list(reader.iterShapes())
+    if len(shapes) != len(records):
+        raise ValueError('Short_Final의 기하/속성 개수가 다릅니다.')
+    lines, used, corrected = [], set(), 0
+    for i, shape in enumerate(shapes):
+        if shape.shapeType not in (shapefile.POLYLINE, shapefile.POLYLINEZ) or list(shape.parts) != [0] or len(shape.points) != 2:
+            raise ValueError(f'Short_Final {i}: 두 꼭짓점의 단일 연결선이 필요합니다.')
+        xy = shape.points
+        matches = [(end, fi) for end in (0, 1) for fi, point in enumerate(faf)
+                   if math.dist(xy[end], point[:2]) <= tolerance]
+        if len(matches) != 1:
+            raise ValueError(f'Short_Final {i}: FAF 끝점이 유일하지 않습니다.')
+        end, fi = matches[0]
+        if fi in used:
+            raise ValueError(f'Short_Final {i}: 중복 FAF 연결입니다.')
+        old_vi = unique_match(xy[1 - end], ports, f'Short_Final {i} 버티포트')
+        vi = targets[fi]
+        corrected += old_vi != vi
+        endpoints = [None, None]
+        endpoints[end], endpoints[1 - end] = faf[fi], ports[vi]
+        lines.append(endpoints)
+        used.add(fi)
+    id_column = next((i for i, field in enumerate(fields) if field[0].lower() == 'id'), None)
+    ids = {record[id_column] for record in records} if id_column is not None else set()
+    missing = sorted(set(targets) - used)
+    for fi in missing:
+        lines.append([faf[fi], ports[targets[fi]]])
+        record = [None] * len(fields)
+        if id_column is not None:
+            new_id = 1
+            while new_id in ids:
+                new_id += 1
+            record[id_column] = new_id
+            ids.add(new_id)
+        records.append(record)
+
+    buffers = {name: io.BytesIO() for name in ('shp', 'shx', 'dbf')}
+    with shapefile.Writer(**buffers, shapeType=shapefile.POLYLINEZ,
+                          encoding=encoding_for(path)) as writer:
+        writer.fields = fields
+        for line, record in zip(lines, records):
+            writer.linez([line])
+            writer.record(*record)
+    content = {name: buffer.getvalue() for name, buffer in buffers.items()}
+
+    def validate(reader):
+        actual = [[(*xy, z) for xy, z in zip(s.points, s.z)] for s in reader.iterShapes()]
+        if reader.shapeType != shapefile.POLYLINEZ or actual != lines:
+            raise ValueError('Short_Final XYZ 저장 검증 실패.')
+        if [list(record) for record in reader.records()] != records:
+            raise ValueError('Short_Final 속성 저장 검증 실패.')
+
+    with shapefile.Reader(**{name: io.BytesIO(data) for name, data in content.items()},
+                          encoding=encoding_for(path)) as reader:
+        validate(reader)
+    print(f'Short_Final: {len(shapes)} → {len(lines)}개 PolyLineZ, '
+          f'누락 보완 {len(missing)}개, 버티포트 대응 보정 {corrected}개')
+    if dry_run:
+        print('검토 완료: 원본 파일은 갱신하지 않았습니다.')
+        return
+    destinations = {name: path.with_suffix('.' + name) for name in content}
+    originals = {name: dest.read_bytes() for name, dest in destinations.items()}
+    changed = []
+    try:
+        for name, dest in destinations.items():
+            changed.append(name)
+            with dest.open('r+b') as stream:
+                stream.write(content[name])
+                stream.truncate()
+        with open_reader(path) as reader:
+            validate(reader)
+    except Exception:
+        for name in reversed(changed):
+            with destinations[name].open('r+b') as stream:
+                stream.write(originals[name])
+                stream.truncate()
+        raise
+    print('기존 Short_Final.shp/.shx/.dbf 갱신 완료. 모든 연결 끝점 XYZ 일치 확인.')
 
 
 if __name__ == '__main__':
