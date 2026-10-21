@@ -21,6 +21,8 @@ python -B -X utf8 Network/코드/export_kepler_flows.py
 
 ## 실행
 
+접근·착륙·지상 체류·이륙·출항을 포함한 10·20·30·40·50·60대 실험은 `python -B -X utf8 Network/코드/full_operation_fleet.py`로 실행한다. 결과와 Kepler 궤적은 [전체 운항 비교](결과물/고정대수_20_60/실험과_학습자료.md)에 있다. 총 투입 대수이며 동시 체공 대수는 별도로 기록한다.
+
 프로젝트 최상위 폴더에서 실행한다.
 
 ```powershell
