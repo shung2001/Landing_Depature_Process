@@ -22,11 +22,9 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import rasterio
 import shapely
 from pyproj import Transformer
 from shapely.geometry import Polygon, Point, MultiPolygon
-from 장애물접근표면 import create_ols_triangle
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / '자료/안전성/송파구'
@@ -479,8 +477,17 @@ def workflow_tests():
     optimization_records[5]['status']='REVIEW'
     groups,_=admissible_bundles(optimization_records,[{'building_id':'B'}])
     assert all(all(optimization_records[i]['status']=='PASS' for i in bundle) for bundle in groups['B'])
+    # 세 표면의 중첩을 쌍 수(3쌍)가 아닌 실제 표면 수(3개)로 분류한다.
+    count_records=[dict(building_id=name,geometry=shapely.box(x,0,x+3,2))
+                   for name,x in [('A',0),('B',1),('C',2)]]
+    regions=overlap_regions(count_records)
+    assert np.isclose(sum(r['geometry'].area for r in regions if r['ols_count']==2),4.)
+    assert np.isclose(sum(r['geometry'].area for r in regions if r['ols_count']==3),2.)
+    assert not overlap_regions([dict(r,building_id='A') for r in count_records])
+    assert not overlap_regions([])
     print('WORKFLOW TEST OK: 쌍 우선, 135도/순환각, 조건부/부적합, 링 방향, Z/소유관계 보존')
     print('OVERLAP TEST OK: XY/높이 교차 구분, 공동 면적 감소, 품질등급 보존')
+    print('OVERLAP COUNT TEST OK: 2중/3중 영역 면적, 동일 건물 제외, 빈 입력')
 
 
 def surface_altitudes(record):
@@ -518,6 +525,7 @@ def agl_labels(records,dem_path):
     끝단 범위는 두 꼭짓점의 값이며, 끝단 변 전체의 최솟값/최댓값이 아니다.
     Polygon Z는 그대로 두고 표시만 변환한다. NoData는 임의 대체하지 않는다.
     """
+    import rasterio
     labels={}
     with rasterio.open(dem_path) as dem:
         transform=Transformer.from_crs(5186,dem.crs,always_xy=True)
@@ -678,8 +686,82 @@ def draw_overlap_comparison(baseline,selected,comparison,obstacles,out,formats=(
     plt.close(fig)
 
 
+def overlap_regions(selected):
+    """XY 경계를 분할하여 각 영역의 실제 OLS 수와 소유 건물 수를 계산한다."""
+    geometries=[shapely.force_2d(r['geometry']) for r in selected]
+    if not geometries:
+        return []
+    from shapely.ops import polygonize
+    tree=shapely.STRtree(geometries)
+    faces=polygonize(shapely.union_all([g.boundary for g in geometries]))
+    regions=[]
+    for face in faces:
+        if face.area <= AREA_TOL:
+            continue
+        point=face.representative_point()
+        indices=tree.query(point,predicate='intersects')
+        owners={selected[int(i)]['building_id'] for i in indices}
+        # 최적화 목적함수와 동일하게 서로 다른 소유 건물 간 중첩만 집계한다.
+        if len(owners)<2:
+            continue
+        regions.append(dict(geometry=face,ols_count=len(indices),owner_count=len(owners)))
+    return regions
+
+
+def draw_overlap_counts(selected,obstacles,out):
+    """최소화된 최종 배치와 영역별 OLS 중첩 개수만 PNG로 표시한다."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+    plt.rcParams.update({'font.family':'Malgun Gothic','axes.unicode_minus':False})
+    regions=overlap_regions(selected)
+    counts=sorted({r['ols_count'] for r in regions})
+    colors={n:plt.get_cmap('YlOrRd')(.35+.6*i/max(1,len(counts)-1)) for i,n in enumerate(counts)}
+    fig,ax=plt.subplots(figsize=(13,14))
+    geometries=[shapely.force_2d(r['geometry']) for r in selected]
+    xmin,ymin,xmax,ymax=shapely.union_all(geometries).bounds if geometries else obstacles.total_bounds
+    pad=max(xmax-xmin,ymax-ymin,200)*.06
+    local=obstacles.cx[xmin-pad:xmax+pad,ymin-pad:ymax+pad]
+    if len(local):
+        local.plot(ax=ax,color='#e8ecef',linewidth=0,zorder=0)
+    if geometries:
+        gpd.GeoSeries(geometries,crs=5186).plot(ax=ax,facecolor='#e2f0f5',edgecolor='#5d8295',linewidth=.7,zorder=1)
+    for n in counts:
+        gpd.GeoSeries([r['geometry'] for r in regions if r['ols_count']==n],crs=5186).plot(
+            ax=ax,color=colors[n],edgecolor='#a53b28',linewidth=.45,zorder=2)
+    # 같은 개수의 인접 영역을 합쳐 표기 수를 줄인다. 분리된 영역은 각각 표시한다.
+    for n in counts:
+        merged=shapely.union_all([r['geometry'] for r in regions if r['ols_count']==n])
+        for part in shapely.get_parts(merged):
+            p=part.representative_point()
+            ax.annotate(f'{n}개',(p.x,p.y),ha='center',va='center',fontsize=11,weight='bold',
+                bbox=dict(boxstyle='round,pad=.15',facecolor='white',edgecolor='#9b4938',alpha=.9),zorder=4)
+    owners={r['building_id']:r for r in selected}
+    for record in owners.values():
+        ax.scatter(record['center_x'],record['center_y'],s=30,c='#213e50',marker='*',zorder=5)
+        ax.annotate(owner_label(record),(record['center_x'],record['center_y']),xytext=(5,7),
+            textcoords='offset points',fontsize=8,bbox=dict(facecolor='white',edgecolor='none',alpha=.8),zorder=5)
+    ax.set_xlim(xmin-pad,xmax+pad);ax.set_ylim(ymin-pad,ymax+pad);ax.set_aspect('equal')
+    ax.ticklabel_format(style='plain',useOffset=False);ax.tick_params(labelsize=8);ax.grid(alpha=.15)
+    ax.set_xlabel('Easting (m) · EPSG:5186');ax.set_ylabel('Northing (m)')
+    ax.set_title('색칠된 영역: 서로 다른 건물의 OLS 중첩\n영역 안 숫자: 해당 위치에 겹치는 OLS 개수',fontsize=13,pad=14)
+    if counts:
+        ax.legend(handles=[Patch(facecolor=colors[n],edgecolor='#a53b28',label=f'OLS {n}개 중첩') for n in counts],
+            loc='upper right',framealpha=.95,fontsize=11)
+    else:
+        ax.text(.5,.5,'면적이 있는 중첩 영역 없음',transform=ax.transAxes,ha='center',fontsize=13)
+    fig.suptitle('중첩 면적 최소화 후 최종 OLS',fontsize=22,weight='bold',y=.975)
+    fig.text(.5,.025,'서로 다른 건물 간 XY 중첩 기준 · 영역 위 숫자는 해당 위치에 겹치는 OLS 개수',
+        ha='center',fontsize=11,color='#444444')
+    fig.subplots_adjust(top=.90,bottom=.08,left=.09,right=.97)
+    save_map(fig,out,'중첩',('png',))
+    plt.close(fig)
+    print(f'중첩 시각화 저장: {out / "중첩.png"}',flush=True)
+
+
 def redraw_existing_pngs(out,building_path,dem_path=DATA/'송파구_DEM.tif'):
-    """현재 선정 결과를 읽어서 PNG 두 개만 갱신한다. 최적화는 재실행하지 않는다."""
+    """현재 선정 결과를 읽어서 PNG 세 개만 갱신한다. 최적화는 재실행하지 않는다."""
     source=out/'ols_selected_surfaces.gpkg'
     selected=gpd.read_file(source,layer='ols_selected_surfaces').to_dict('records')
     baseline=gpd.read_file(source,layer='ols_independent_baseline').to_dict('records')
@@ -690,7 +772,8 @@ def redraw_existing_pngs(out,building_path,dem_path=DATA/'송파구_DEM.tif'):
     obstacles=gpd.read_file(building_path).to_crs(5186)
     draw_maps(selected,owners,obstacles,out,formats=('png',),dem_path=dem_path)
     draw_overlap_comparison(baseline,selected,comparison,obstacles,out,formats=('png',),dem_path=dem_path)
-    print(f'PNG 2개 갱신 완료 (해당 좌표 DEM을 뺀 AGL m): {out}')
+    draw_overlap_counts(selected,obstacles,out)
+    print(f'PNG 3개 갱신 완료: {out}')
 
 
 def main():
@@ -698,7 +781,8 @@ def main():
     import zipfile
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--self-test', action='store_true')
-    parser.add_argument('--png-only',action='store_true',help='현재 선정 결과로 고도 포함 PNG 2개만 갱신')
+    parser.add_argument('--png-only',action='store_true',help='현재 선정 결과로 고도·중첩 PNG 3개만 갱신')
+    parser.add_argument('--overlap-only',action='store_true',help='현재 선정 결과로 중첩.png만 생성 (최적화 재실행 없음)')
     parser.add_argument('--buildings', type=Path, default=DATA/'송파구_건물_수정_update.shp')
     parser.add_argument('--dem', type=Path, default=DATA/'송파구_DEM.tif')
     parser.add_argument('--candidates', type=Path, default=ROOT/'자료/결과물/Polygon/8')
@@ -708,12 +792,20 @@ def main():
     args = parser.parse_args()
     if args.self_test:
         workflow_tests(); return
+    if args.overlap_only:
+        out=args.output.resolve()
+        selected=gpd.read_file(out/'ols_selected_surfaces.gpkg',layer='ols_selected_surfaces').to_dict('records')
+        obstacles=gpd.read_file(args.buildings).to_crs(5186)
+        draw_overlap_counts(selected,obstacles,out)
+        return
     if args.png_only:
         redraw_existing_pngs(args.output.resolve(),args.buildings,args.dem)
         return
     if args.optimization_starts<1 or args.optimization_max_sweeps<1:
         parser.error('최적화 시작점 수와 반복 한도는 1 이상이어야 합니다.')
+    import rasterio
     summary_path=args.candidates/'generation_summary.csv'
+    from 장애물접근표면 import create_ols_triangle
     summary=pd.read_csv(summary_path).sort_values('id')
     check_inputs(summary,args.candidates)
     buildings=gpd.read_file(args.buildings).to_crs(5186)
@@ -963,6 +1055,7 @@ def main():
     add_tables(unique_path,tables); add_tables(selected_path,tables)
     draw_maps(selected,owners,buildings,out,dem_path=args.dem)
     draw_overlap_comparison(baseline_records,selected,comparison,buildings,out,dem_path=args.dem)
+    draw_overlap_counts(selected,buildings,out)
     notes=['# 후보 건물별 최종 OLS 선정',
         f'- 원본 {len(raw)}개 → 소유 건물별 고유 후보 {len(unique)}개. 후보 건물 {len(owners)}개, 원본 VP {len(summary)}개.',
         f'- 선정 표면 {len(selected)}개. 2개 선정 건물 {sum(r["selected_count"]==2 for r in summaries)}개.',

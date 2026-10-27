@@ -5,9 +5,12 @@
 고도는 원본 geometry Z(m)이며 AGL로 변환하지 않는다.
 FAF_IAF_In.shp가 없으면 기존 이름 IAF_FAF.shp를 읽는다.
 전체 altitude.png와 개별 altitude_route_01.png ~ altitude_route_16.png를 저장한다.
+구간별 slope를 개별 고도 그래프와 altitude_slopes.png에 표시하고,
+구간 평균 altitude_slopes.csv와 꼭짓점 간 altitude_slope_intervals.csv를 저장한다.
 """
 
 import argparse
+import csv
 from pathlib import Path
 
 import geopandas as gpd
@@ -106,6 +109,75 @@ def configure_style():
                          'axes.edgecolor': '#ccd5df', 'savefig.facecolor': '#f7f9fc'})
 
 
+def segment_names(segments):
+    return (['외곽→내곽', '내곽 원호', '내곽 IAF→FAF', 'FAF→착륙 (OLS 중심선)']
+            if len(segments) == 4 else ['외곽 IAF→FAF', 'FAF→착륙 (OLS 중심선)'])
+
+
+def slope_values(xyz):
+    """경로를 따른 수평거리 기준의 평균 경사와 꼭짓점 사이 경사를 계산한다."""
+    delta = np.diff(xyz, axis=0)
+    horizontal = np.linalg.norm(delta[:, :2], axis=1)
+    dz = delta[:, 2]
+    if np.any((horizontal <= 1e-9) & (np.abs(dz) > 1e-9)):
+        raise ValueError('수직 이동 구간은 수평거리 기준 slope를 정의할 수 없습니다.')
+    grades = np.divide(dz, horizontal, out=np.zeros_like(dz), where=horizontal > 1e-9)
+    total = float(horizontal.sum())
+    grade = float(dz.sum() / total) if total > 1e-9 else 0.
+    return dict(horizontal_m=total, delta_z_m=float(dz.sum()), slope_percent=100 * grade,
+                slope_deg=float(np.degrees(np.arctan(grade))),
+                min_local_slope_deg=float(np.degrees(np.arctan(grades)).min()),
+                max_local_slope_deg=float(np.degrees(np.arctan(grades)).max())), horizontal, dz, grades
+
+
+def export_slopes(complete, output, dpi):
+    """논리 구간 평균과 원본 꼭짓점 사이의 경사를 각각 저장한다."""
+    rows, details = [], []
+    for key, segments in complete:
+        station = 0.
+        for number, ((xyz, _), name) in enumerate(zip(segments, segment_names(segments)), 1):
+            stats, horizontal, dz, grades = slope_values(xyz)
+            rows.append(dict(route_id=int(key), segment=number, segment_name=name,
+                             start_z_m=float(xyz[0, 2]), end_z_m=float(xyz[-1, 2]), **stats))
+            for index, (distance, height, grade) in enumerate(zip(horizontal, dz, grades), 1):
+                details.append(dict(route_id=int(key), segment=number, segment_name=name,
+                    vertex_interval=index, start_station_m=station, end_station_m=station + float(distance),
+                    horizontal_m=float(distance), delta_z_m=float(height),
+                    slope_percent=float(grade * 100), slope_deg=float(np.degrees(np.arctan(grade)))))
+                station += float(distance)
+    for suffix, records in (('slopes', rows), ('slope_intervals', details)):
+        target = output.with_name(f'{output.stem}_{suffix}.csv')
+        with target.open('w', newline='', encoding='utf-8-sig') as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(records[0]))
+            writer.writeheader(); writer.writerows(records)
+        print(f'Saved: {target}')
+    fig, axes = plt.subplots(int(np.ceil(len(complete) / 4)), 4,
+                             figsize=(22, 3.5 * int(np.ceil(len(complete) / 4))), squeeze=False,
+                             facecolor='#f7f9fc')
+    for ax, (key, segments) in zip(axes.flat, complete):
+        station = 0.
+        for (xyz, color), name in zip(segments, segment_names(segments)):
+            stats, horizontal, _, grades = slope_values(xyz)
+            distance = np.r_[0., np.cumsum(horizontal)] / 1000
+            ax.stairs(np.degrees(np.arctan(grades)), station + distance, baseline=None,
+                      color=color, linewidth=2,
+                      label=f"{name}: {stats['slope_deg']:+.2f}° / {stats['slope_percent']:+.2f}%")
+            station += distance[-1]
+        ax.axhline(0, color='#8292a2', lw=.7)
+        ax.set_title(f'ROUTE {int(key):02d}', weight='bold')
+        ax.set_xlabel('누적 수평거리 (km)'); ax.set_ylabel('경사각 (°)')
+        ax.grid(alpha=.2); ax.legend(fontsize=7, loc='best')
+    for ax in list(axes.flat)[len(complete):]:
+        ax.set_visible(False)
+    fig.suptitle('구간별 항로 slope · 진행 방향 기준 (하강 - / 상승 +)', fontsize=20, weight='bold')
+    fig.text(.5, .012, '경사율(%) = ΔZ / 수평거리 × 100 · 경사각(°) = atan(ΔZ / 수평거리) · 선: 꼭짓점 사이 경사 / 범례: 구간 평균 · OLS 중심선은 시각화용',
+             ha='center', fontsize=10)
+    fig.tight_layout(rect=(0, .04, 1, .95))
+    target = output.with_name(f'{output.stem}_slopes.png')
+    fig.savefig(target, dpi=dpi); plt.close(fig)
+    print(f'Saved: {target}')
+
+
 def draw_individual(key, segments, rings, surfaces, local, output, dpi):
     """전체 그림과 동일한 경로 조합으로 개별 착륙 과정을 출력한다."""
     via_inner = len(segments) == 4
@@ -137,12 +209,20 @@ def draw_individual(key, segments, rings, surfaces, local, output, dpi):
     axmap.fill(polygon[:, 0], polygon[:, 1], color=LANDING, alpha=.15)
     at = 0.
     station_bounds = [0.]
-    for xyz, color in segments:
+    for segment_index, (xyz, color) in enumerate(segments):
         q = local(xyz)
         ax3.plot(*q.T, color=color, lw=2.6)
         axmap.plot(q[:, 0], q[:, 1], color=color, lw=2.2)
         distance = np.r_[0., np.cumsum(np.linalg.norm(np.diff(xyz[:, :2], axis=0), axis=1))] / 1000
         axprof.plot(at + distance, q[:, 2], color=color, lw=2.5)
+        stats, _, _, _ = slope_values(xyz)
+        midpoint = distance[-1] / 2
+        middle_z = np.interp(midpoint, distance, q[:, 2])
+        axprof.annotate(f"{stats['slope_deg']:+.2f}°\n{stats['slope_percent']:+.2f}%",
+                        (at + midpoint, middle_z), xytext=(0, -34 if segment_index % 2 == 0 else 22),
+                        textcoords='offset points', ha='center', fontsize=8, color=color,
+                        bbox=dict(boxstyle='round,pad=.25', facecolor='white', edgecolor=color, alpha=.95),
+                        arrowprops=dict(arrowstyle='-', color=color, lw=.7), zorder=6)
         # 직선 OLS 구간도 포함해 평면도에 진행 방향을 표시한다.
         if distance[-1] > .01:
             a, b = distance[-1] * .45, distance[-1] * .62
@@ -195,7 +275,7 @@ def draw_individual(key, segments, rings, surfaces, local, output, dpi):
     fig.legend(handles=handles, loc='lower center', bbox_to_anchor=(.5, .12), ncol=4, frameon=False)
     fig.text(.055, .09, '내곽 경유: 가장 가까운 진입부 + 실제 내곽의 최단 원호 연결 예시. 원본에 운항 방향은 지정되어 있지 않습니다.', fontsize=9, color='#607080')
     fig.text(.055, .063, 'OLS는 장애물 제한 표면입니다. FAF→OLS 저점 중심선은 착륙 시각화용 경로입니다.', fontsize=9, color='#607080')
-    fig.text(.055, .036, '원본 geometry Z를 ft로 환산(AGL 아님) · EPSG:5186 · XY는 도심 기준 상대거리 · 3D 수직축 확대', fontsize=9, color='#607080')
+    fig.text(.055, .036, '원본 Z 고도(AGL 아님) · slope: ΔZ/수평거리 (하강 -) · 표기: 구간 평균 경사각(°) / 경사율(%) · 3D 수직축 확대', fontsize=9, color='#607080')
     fig.savefig(output, dpi=dpi)
     plt.close(fig)
     print(f'Saved route {int(key):02d}: {output}')
@@ -356,6 +436,7 @@ def draw(input_dir, output, dpi=220, individual_only=False):
              '실제 Z 사용 · EPSG:5186 · XY는 도심 기준 상대거리 · 3D 수직축 확대 · 자료: 최종정리 / IAF_FAF, Interchange_In, 최종OLS',
              fontsize=9, color='#607080')
     output.parent.mkdir(parents=True, exist_ok=True)
+    export_slopes(complete, output, dpi)
     if not individual_only:
         fig.savefig(output, dpi=dpi)
     plt.close(fig)
