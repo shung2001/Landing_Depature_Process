@@ -1,0 +1,11 @@
+{
+  "selected_pairs": 8,
+  "approach_count": 8,
+  "departure_count": 8,
+  "length_m": 39290.042252783926,
+  "landing_area_crossings": 9,
+  "minimum_xy_m": 0.0,
+  "planar_crossing_pairs": 26,
+  "evaluated_locations": 27,
+  "minimum_crossing_z_m": 13.515732907681667
+}

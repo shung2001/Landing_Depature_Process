@@ -1,0 +1,83 @@
+{
+  "input_files": [
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\자료\\최종정리\\Short_Final.shp",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Approach_z.shp",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Departure_z.shp"
+  ],
+  "input_sha256": {
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Approach_z.shp": "4143d82b94ffe85d2b311b779f6a486bbb14fe72e17ee11f59d8f732347b8858",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Approach_z.shx": "652bd46a37142da97d7aaaf504820353f094cc391f9ec6ab241245a31f5b8576",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Approach_z.dbf": "b6cf6be47dd5794ef1b5e7f451252608690042923a142c15f55f2953f4e7fc9b",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Approach_z.prj": "a04efc9a47eeeffd9f3485c12f45385a6cd41bb88703292ed6c40acab738ae62",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Approach_z.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Departure_z.shp": "70f27bc9b1ef34bfd86b3a2d5d13fdccb357b9dbaa5944ac9484e6923d0d37ae",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Departure_z.shx": "0db9ec1f0ce594cbf70ddf86c416014b1309283fd7728afd61374725be893016",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Departure_z.dbf": "72d785712a1d6c6ac5f2d9bb788fa2c51ac9e81b6cbb369bc77b46c6f2fff959",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Departure_z.prj": "a04efc9a47eeeffd9f3485c12f45385a6cd41bb88703292ed6c40acab738ae62",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\수정본_20261103\\결과물\\optimization_path_reviewed\\inside_only\\new_options\\vertical_clearance_alternative\\Departure_z.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\자료\\최종정리\\Short_Final.shp": "570706996c9696dd4a3296209690ab16c1b6bc2b57a312e347e50d014ed5d6f8",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\자료\\최종정리\\Short_Final.shx": "63437918e0e68d97e6af4f9aabbd28dca500b04156df50a4c891b8dcf40ae292",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\자료\\최종정리\\Short_Final.dbf": "e3a325a83a7f19adca474033eda59d02c638d4ea402ca3186afbcc269297460e",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\자료\\최종정리\\Short_Final.prj": "a04efc9a47eeeffd9f3485c12f45385a6cd41bb88703292ed6c40acab738ae62",
+    "C:\\Users\\choih\\Desktop\\연구\\Landing_Depature_Process\\자료\\최종정리\\Short_Final.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824"
+  },
+  "horizontal_crs": "EPSG:5186",
+  "z_datum_conversion": false,
+  "z_assumption": "Both inputs use the same vertical datum and metres.",
+  "xy_tolerance_m": 1e-06,
+  "short_final_route_parts": 16,
+  "approach_departure_route_parts": 16,
+  "groups": {
+    "Short_Final_internal": {
+      "group": "Short_Final_internal",
+      "a_route_parts": 16,
+      "b_route_parts": 16,
+      "intersection_evaluations": 16,
+      "intersecting_route_pairs": 16,
+      "shared_endpoint_evaluations": 8,
+      "non_shared_endpoint_evaluations": 8,
+      "overlap_evaluations": 0,
+      "minimum_all_m": 0.0,
+      "minimum_non_shared_m": 0.25135292945540755,
+      "maximum_all_m": 50.887045103630754,
+      "height_png_pages": [
+        "crossing_heights_01.png"
+      ]
+    },
+    "Vertical_routes_internal": {
+      "group": "Vertical_routes_internal",
+      "a_route_parts": 16,
+      "b_route_parts": 16,
+      "intersection_evaluations": 27,
+      "intersecting_route_pairs": 26,
+      "shared_endpoint_evaluations": 0,
+      "non_shared_endpoint_evaluations": 27,
+      "overlap_evaluations": 0,
+      "minimum_all_m": 13.515732907681695,
+      "minimum_non_shared_m": 13.515732907681695,
+      "maximum_all_m": 94.17031478573386,
+      "height_png_pages": [
+        "crossing_heights_01.png",
+        "crossing_heights_02.png"
+      ]
+    },
+    "Short_Final_vs_vertical_routes": {
+      "group": "Short_Final_vs_vertical_routes",
+      "a_route_parts": 16,
+      "b_route_parts": 16,
+      "intersection_evaluations": 22,
+      "intersecting_route_pairs": 22,
+      "shared_endpoint_evaluations": 16,
+      "non_shared_endpoint_evaluations": 6,
+      "overlap_evaluations": 0,
+      "minimum_all_m": 0.0,
+      "minimum_non_shared_m": 55.709507543497864,
+      "maximum_all_m": 183.70617334338277,
+      "height_png_pages": [
+        "crossing_heights_01.png",
+        "crossing_heights_02.png"
+      ]
+    }
+  },
+  "original_inputs_unchanged": true
+}

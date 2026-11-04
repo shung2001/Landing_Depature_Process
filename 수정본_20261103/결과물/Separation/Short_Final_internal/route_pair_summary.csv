@@ -1,0 +1,17 @@
+﻿route_a,label_a,route_b,label_b,evaluations,min_gap_m,max_gap_m
+SF:FID0:part0,Short_Final id=1,SF:FID14:part0,Short_Final id=16,1,3.477083150,3.477083150
+SF:FID0:part0,Short_Final id=1,SF:FID1:part0,Short_Final id=2,1,0.000000000,0.000000000
+SF:FID12:part0,Short_Final id=14,SF:FID13:part0,Short_Final id=15,1,7.561159768,7.561159768
+SF:FID1:part0,Short_Final id=2,SF:FID15:part0,Short_Final id=9,1,50.887045104,50.887045104
+SF:FID2:part0,Short_Final id=3,SF:FID12:part0,Short_Final id=14,1,0.000000000,0.000000000
+SF:FID2:part0,Short_Final id=3,SF:FID4:part0,Short_Final id=5,1,34.028088624,34.028088624
+SF:FID3:part0,Short_Final id=4,SF:FID13:part0,Short_Final id=15,1,0.000000000,0.000000000
+SF:FID3:part0,Short_Final id=4,SF:FID4:part0,Short_Final id=5,1,42.149267692,42.149267692
+SF:FID4:part0,Short_Final id=5,SF:FID15:part0,Short_Final id=9,1,0.000000000,0.000000000
+SF:FID5:part0,Short_Final id=6,SF:FID12:part0,Short_Final id=14,1,0.251352929,0.251352929
+SF:FID5:part0,Short_Final id=6,SF:FID13:part0,Short_Final id=15,1,17.019012351,17.019012351
+SF:FID5:part0,Short_Final id=6,SF:FID14:part0,Short_Final id=16,1,0.000000000,0.000000000
+SF:FID6:part0,Short_Final id=7,SF:FID10:part0,Short_Final id=11,1,0.000000000,0.000000000
+SF:FID6:part0,Short_Final id=7,SF:FID7:part0,Short_Final id=8,1,23.104598993,23.104598993
+SF:FID7:part0,Short_Final id=8,SF:FID11:part0,Short_Final id=13,1,0.000000000,0.000000000
+SF:FID8:part0,Short_Final id=10,SF:FID9:part0,Short_Final id=12,1,0.000000000,0.000000000

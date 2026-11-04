@@ -1,0 +1,547 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>STAR/SID 항로 비교</title>
+<style>body{font-family:Malgun Gothic,sans-serif;max-width:1300px;margin:32px auto;line-height:1.7}img{max-width:100%}table{border-collapse:collapse}td,th{padding:5px;border:1px solid #ccc}.note{background:#fff2d8;padding:16px}</style>
+<h1>Inner Ring STAR / 반대편 FAF SID 공동 선정</h1>
+
+<p>형태 재검토: 원형 우회로 구배를 맞추던 기존 해를 제거했습니다.
+총 선회량 ≤180°, 개별 원호 ≤180°,
+자기교차 금지를 추가했습니다. 이 각도 제한은 이번 모델의 형태 필터이며 FAA/NASA의 공통 승인 기준이 아닙니다.
+초기 조건 대조와 수정 근거는 <a href="design_review.md">design_review.md</a>에 기록했습니다.</p>
+<p>쌍마다 STAR 하나와 반대편 FAF의 SID 하나를 함께 선정합니다. STAR는 링→FAF, SID는 FAF→링으로
+각각 새 시계방향 RSR을 계산합니다. SID를 STAR의 좌표 역순으로 만들지 않습니다.</p>
+<p>링 350m, STAR 70→60kt,
+SID 60→70kt. 상승·하강 모두
+2.36°와 250ft/NM 중 엄격한 제한 적용.
+뱅크 ≤30°. 속도는 무풍 TAS로 가정하고 FAF alt를 사용합니다.</p>
+<p class="note">항로 간 거리는 전체 중심선의 XY 최소 거리이며 끝점도 포함합니다.
+고정된 16개 FAF의 최소 간격이 77.15m라서 모든 항로 간격을
+100m 이상으로 만드는 것은 불가능할 수 있습니다.
+간격 목표는 연성 조건이고, 항로 교차를 강하게 벌점 처리합니다. 수직 분리로 XY 교차를 면제하지 않습니다.</p>
+<p>inside_only는 원호와 직선의 해석적 최대 반경을 검사하여 링 밖으로 나가지 못하게 합니다.
+outside_allowed는 동일 후보에 링 밖 우회를 추가로 허용합니다.
+outside_detour는 각 항로가 링 반경보다 1m 이상 벗어나는 후보만 사용하는 추가 비교안입니다.
+이전 STAR 단독 결과는 그대로 보존합니다.</p>
+<h2>링 내부 제한</h2><h3>불관용 기준 비교안: Landing_Area 관통 0건 + 항로 교차 0건</h3>
+<p>FAF 3쌍 / Approach·Departure 합계 6개.
+최소 항로 간격 162.21m. 미연결 쌍: [1, 2, 4, 5, 8].
+선별 후보 안에서 연결 쌍 수 최적성 입증: True.</p>
+<p><a href="inside_only/strict_noncrossing/Approach_z.shp">불관용 Approach SHP</a> ·
+<a href="inside_only/strict_noncrossing/Departure_z.shp">불관용 Departure SHP</a></p>
+<img src="inside_only/strict_noncrossing/map_combined.png"><h3>연결 범위 우선 비교안 — 교차가 남으면 최종 무교차 항로가 아님</h3>
+<p>STAR 8개 / SID 8개.
+항로 교차 21쌍, 최소 XY 간격 0.00m,
+길이 합 38.80km, 링 밖 우회 0개.
+Landing_Area 관통 8건 (pairwise_strict_then_penalized).</p>
+<p>선정하지 못한 쌍: []. 후보 수 7,816, 조합 탐색용 후보 975.</p>
+<p>교차 0건 추가 탐색: time_limit_no_zero_crossing_incumbent.
+시간 제한으로 해를 찾지 못한 경우 교차 없는 해가 존재하지 않는다는 뜻은 아닙니다.</p>
+<p><a href="inside_only/Approach_z.shp">Approach 전용 SHP</a> ·
+<a href="inside_only/Departure_z.shp">Departure 전용 SHP</a> ·
+<a href="inside_only/route_pair_spacing.csv">항로 간격·교차 CSV</a></p>
+<details><summary>통합 비교 지도 (Approach와 Departure SHP는 별도)</summary><img src="inside_only/map_combined.png"></details>
+<h3>Approach</h3><img src="inside_only/map_star.png"><h3>Departure</h3><img src="inside_only/map_sid.png">
+<details><summary>3D / 고도 / 선정 표</summary><img src="inside_only/view3d.png"><img src="inside_only/profiles.png"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>operation</th>
+      <th>pair</th>
+      <th>faf_id</th>
+      <th>iaf_id</th>
+      <th>length_m</th>
+      <th>slope_deg</th>
+      <th>bank_deg</th>
+      <th>outside_m</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STAR</td>
+      <td>1</td>
+      <td>11</td>
+      <td>413</td>
+      <td>3341.02</td>
+      <td>2.33</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>1</td>
+      <td>12</td>
+      <td>309</td>
+      <td>3305.09</td>
+      <td>2.36</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>2</td>
+      <td>7</td>
+      <td>379</td>
+      <td>2758.99</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>2</td>
+      <td>8</td>
+      <td>227</td>
+      <td>2757.21</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>3</td>
+      <td>9</td>
+      <td>499</td>
+      <td>2956.61</td>
+      <td>2.35</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>3</td>
+      <td>10</td>
+      <td>180</td>
+      <td>2962.68</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>4</td>
+      <td>13</td>
+      <td>634</td>
+      <td>2149.57</td>
+      <td>2.33</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>4</td>
+      <td>14</td>
+      <td>360</td>
+      <td>2133.72</td>
+      <td>2.35</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>5</td>
+      <td>2</td>
+      <td>759</td>
+      <td>1862.87</td>
+      <td>2.09</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>5</td>
+      <td>1</td>
+      <td>626</td>
+      <td>2671.30</td>
+      <td>1.46</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>6</td>
+      <td>3</td>
+      <td>374</td>
+      <td>2256.64</td>
+      <td>1.70</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>6</td>
+      <td>4</td>
+      <td>254</td>
+      <td>1640.11</td>
+      <td>2.34</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>7</td>
+      <td>15</td>
+      <td>443</td>
+      <td>1163.65</td>
+      <td>2.35</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>7</td>
+      <td>16</td>
+      <td>342</td>
+      <td>1172.16</td>
+      <td>2.33</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>8</td>
+      <td>6</td>
+      <td>767</td>
+      <td>2831.09</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>8</td>
+      <td>5</td>
+      <td>558</td>
+      <td>2837.90</td>
+      <td>2.35</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+  </tbody>
+</table></details>
+<h3>Landing_Area 페널티 허용: 교차 0건 부분 구성</h3><p>연결한 FAF 쌍 4개,
+Approach/Departure 합계 8개. 교차 0쌍,
+최소 간격 165.10m. Landing_Area 관통 6건. 미연결 쌍: [1, 2, 3, 8].
+선별 후보 안에서 연결 쌍 수 최적성 입증: True.</p>
+<p><a href="inside_only/noncrossing_subset/Approach_z.shp">교차 0건 Approach SHP</a> ·
+<a href="inside_only/noncrossing_subset/Departure_z.shp">교차 0건 Departure SHP</a></p>
+<details><summary>교차 0건 지도</summary><img src="inside_only/noncrossing_subset/map_combined.png"></details><h2>링 밖 우회 허용</h2><h3>불관용 기준 비교안: Landing_Area 관통 0건 + 항로 교차 0건</h3>
+<p>FAF 3쌍 / Approach·Departure 합계 6개.
+최소 항로 간격 198.19m. 미연결 쌍: [1, 2, 4, 5, 8].
+선별 후보 안에서 연결 쌍 수 최적성 입증: True.</p>
+<p><a href="outside_allowed/strict_noncrossing/Approach_z.shp">불관용 Approach SHP</a> ·
+<a href="outside_allowed/strict_noncrossing/Departure_z.shp">불관용 Departure SHP</a></p>
+<img src="outside_allowed/strict_noncrossing/map_combined.png"><h3>연결 범위 우선 비교안 — 교차가 남으면 최종 무교차 항로가 아님</h3>
+<p>STAR 8개 / SID 8개.
+항로 교차 16쌍, 최소 XY 간격 0.00m,
+길이 합 38.68km, 링 밖 우회 5개.
+Landing_Area 관통 6건 (pairwise_strict_then_penalized).</p>
+<p>선정하지 못한 쌍: []. 후보 수 9,267, 조합 탐색용 후보 1,011.</p>
+<p>교차 0건 추가 탐색: infeasible_in_shortlist.
+시간 제한으로 해를 찾지 못한 경우 교차 없는 해가 존재하지 않는다는 뜻은 아닙니다.</p>
+<p><a href="outside_allowed/Approach_z.shp">Approach 전용 SHP</a> ·
+<a href="outside_allowed/Departure_z.shp">Departure 전용 SHP</a> ·
+<a href="outside_allowed/route_pair_spacing.csv">항로 간격·교차 CSV</a></p>
+<details><summary>통합 비교 지도 (Approach와 Departure SHP는 별도)</summary><img src="outside_allowed/map_combined.png"></details>
+<h3>Approach</h3><img src="outside_allowed/map_star.png"><h3>Departure</h3><img src="outside_allowed/map_sid.png">
+<details><summary>3D / 고도 / 선정 표</summary><img src="outside_allowed/view3d.png"><img src="outside_allowed/profiles.png"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>operation</th>
+      <th>pair</th>
+      <th>faf_id</th>
+      <th>iaf_id</th>
+      <th>length_m</th>
+      <th>slope_deg</th>
+      <th>bank_deg</th>
+      <th>outside_m</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STAR</td>
+      <td>1</td>
+      <td>11</td>
+      <td>444</td>
+      <td>3316.09</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>334.12</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>1</td>
+      <td>12</td>
+      <td>309</td>
+      <td>3305.09</td>
+      <td>2.36</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>2</td>
+      <td>7</td>
+      <td>379</td>
+      <td>2758.99</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>2</td>
+      <td>8</td>
+      <td>227</td>
+      <td>2757.21</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>3</td>
+      <td>9</td>
+      <td>556</td>
+      <td>2963.28</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>2376.66</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>3</td>
+      <td>10</td>
+      <td>180</td>
+      <td>2962.68</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>4</td>
+      <td>13</td>
+      <td>555</td>
+      <td>2233.87</td>
+      <td>2.24</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>4</td>
+      <td>14</td>
+      <td>338</td>
+      <td>2132.92</td>
+      <td>2.35</td>
+      <td>14.81</td>
+      <td>959.77</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>5</td>
+      <td>1</td>
+      <td>279</td>
+      <td>1654.17</td>
+      <td>2.35</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>5</td>
+      <td>2</td>
+      <td>958</td>
+      <td>1717.18</td>
+      <td>2.27</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>6</td>
+      <td>3</td>
+      <td>374</td>
+      <td>2256.64</td>
+      <td>1.70</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>6</td>
+      <td>4</td>
+      <td>273</td>
+      <td>1707.84</td>
+      <td>2.24</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>7</td>
+      <td>15</td>
+      <td>413</td>
+      <td>1457.57</td>
+      <td>1.88</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>7</td>
+      <td>16</td>
+      <td>348</td>
+      <td>1242.68</td>
+      <td>2.20</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>8</td>
+      <td>5</td>
+      <td>124</td>
+      <td>3161.25</td>
+      <td>2.11</td>
+      <td>14.81</td>
+      <td>963.86</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>8</td>
+      <td>6</td>
+      <td>192</td>
+      <td>3055.34</td>
+      <td>2.18</td>
+      <td>10.00</td>
+      <td>1418.73</td>
+    </tr>
+  </tbody>
+</table></details>
+<h3>Landing_Area 페널티 허용: 교차 0건 부분 구성</h3><p>연결한 FAF 쌍 4개,
+Approach/Departure 합계 8개. 교차 0쌍,
+최소 간격 165.10m. Landing_Area 관통 6건. 미연결 쌍: [1, 2, 3, 8].
+선별 후보 안에서 연결 쌍 수 최적성 입증: True.</p>
+<p><a href="outside_allowed/noncrossing_subset/Approach_z.shp">교차 0건 Approach SHP</a> ·
+<a href="outside_allowed/noncrossing_subset/Departure_z.shp">교차 0건 Departure SHP</a></p>
+<details><summary>교차 0건 지도</summary><img src="outside_allowed/noncrossing_subset/map_combined.png"></details><h2>링 밖 우회 필수</h2><h3>불관용 기준 비교안: Landing_Area 관통 0건 + 항로 교차 0건</h3>
+<p>FAF 1쌍 / Approach·Departure 합계 2개.
+최소 항로 간격 1236.07m. 미연결 쌍: [1, 2, 3, 4, 5, 7, 8].
+선별 후보 안에서 연결 쌍 수 최적성 입증: True.</p>
+<p><a href="outside_detour/strict_noncrossing/Approach_z.shp">불관용 Approach SHP</a> ·
+<a href="outside_detour/strict_noncrossing/Departure_z.shp">불관용 Departure SHP</a></p>
+<img src="outside_detour/strict_noncrossing/map_combined.png"><h3>연결 범위 우선 비교안 — 교차가 남으면 최종 무교차 항로가 아님</h3>
+<p>STAR 3개 / SID 3개.
+항로 교차 5쌍, 최소 XY 간격 0.00m,
+길이 합 14.86km, 링 밖 우회 6개.
+Landing_Area 관통 0건 (pairwise_strict_then_penalized).</p>
+<p>선정하지 못한 쌍: [1, 2, 3, 4, 5]. 후보 수 1,608, 조합 탐색용 후보 578.</p>
+<p>교차 0건 추가 탐색: infeasible_in_shortlist.
+시간 제한으로 해를 찾지 못한 경우 교차 없는 해가 존재하지 않는다는 뜻은 아닙니다.</p>
+<p><a href="outside_detour/Approach_z.shp">Approach 전용 SHP</a> ·
+<a href="outside_detour/Departure_z.shp">Departure 전용 SHP</a> ·
+<a href="outside_detour/route_pair_spacing.csv">항로 간격·교차 CSV</a></p>
+<details><summary>통합 비교 지도 (Approach와 Departure SHP는 별도)</summary><img src="outside_detour/map_combined.png"></details>
+<h3>Approach</h3><img src="outside_detour/map_star.png"><h3>Departure</h3><img src="outside_detour/map_sid.png">
+<details><summary>3D / 고도 / 선정 표</summary><img src="outside_detour/view3d.png"><img src="outside_detour/profiles.png"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>operation</th>
+      <th>pair</th>
+      <th>faf_id</th>
+      <th>iaf_id</th>
+      <th>length_m</th>
+      <th>slope_deg</th>
+      <th>bank_deg</th>
+      <th>outside_m</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STAR</td>
+      <td>6</td>
+      <td>3</td>
+      <td>421</td>
+      <td>2345.00</td>
+      <td>1.64</td>
+      <td>10.00</td>
+      <td>862.63</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>6</td>
+      <td>4</td>
+      <td>321</td>
+      <td>2906.11</td>
+      <td>1.32</td>
+      <td>10.00</td>
+      <td>1951.62</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>7</td>
+      <td>15</td>
+      <td>388</td>
+      <td>2013.92</td>
+      <td>1.36</td>
+      <td>14.81</td>
+      <td>457.92</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>7</td>
+      <td>16</td>
+      <td>354</td>
+      <td>1479.63</td>
+      <td>1.85</td>
+      <td>20.70</td>
+      <td>519.65</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>8</td>
+      <td>5</td>
+      <td>121</td>
+      <td>3196.10</td>
+      <td>2.09</td>
+      <td>14.81</td>
+      <td>960.21</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>8</td>
+      <td>6</td>
+      <td>181</td>
+      <td>2917.19</td>
+      <td>2.29</td>
+      <td>10.00</td>
+      <td>1517.07</td>
+    </tr>
+  </tbody>
+</table></details>
+<h3>Landing_Area 페널티 허용: 교차 0건 부분 구성</h3><p>연결한 FAF 쌍 1개,
+Approach/Departure 합계 2개. 교차 0쌍,
+최소 간격 1236.07m. Landing_Area 관통 0건. 미연결 쌍: [1, 2, 3, 4, 5, 7, 8].
+선별 후보 안에서 연결 쌍 수 최적성 입증: True.</p>
+<p><a href="outside_detour/noncrossing_subset/Approach_z.shp">교차 0건 Approach SHP</a> ·
+<a href="outside_detour/noncrossing_subset/Departure_z.shp">교차 0건 Departure SHP</a></p>
+<details><summary>교차 0건 지도</summary><img src="outside_detour/noncrossing_subset/map_combined.png"></details>
+<h2>선정 방법과 해석</h2><p>먼저 각 FAF 쌍에서 Landing_Area 관통 없는 STAR/SID 구성이 가능한지 검사합니다.
+가능한 쌍은 관통 금지를 유지하고, 불가능한 쌍에만 관통 개수·길이·표면 높이 차 페널티를 적용합니다.
+반경·구배·시계방향·링 내부 경계 같은 기하 조건은 완화하지 않습니다.
+해당 조건으로 구성할 수 없는 쌍은 보고서와 JSON에 누락으로 명시합니다.</p>
+<p>개별 후보 전수 평가 후, 각 운항방향·FAF의 점수 상위 후보와 링 구간별 분산 후보를 모아
+STAR/SID 쌍 단위 다중 시작 좌표하강법으로 공동 선정합니다. 교차 쌍 수, 최소 간격 부족,
+전체 항로 쌍의 간격 부족, 노드 집중, 항로 길이·뱅크각이 목적함수에 들어갑니다.
+전체 후보 조합의 전역 최적성이나 ‘해가 존재하지 않음’을 증명하지 않습니다.
+교차가 남으면 제한 시간 내 MILP로 교차 없는 조합을 추가로 찾습니다. 이 탐색이 성공하면 교차 0건을 유지하며 간격을 재개선합니다.
+시나리오별 독립 휴리스틱 결과이므로 우회 허용의 수치가 내부 제한보다 항상 우수하다는 보장은 없습니다.</p>
+<p>원호는 최대 0.02m 현 오차로 저장하고, 최종 XY 교차·간격은 원본 해상도의
+저장 폴리라인으로 다시 검사합니다. 간격 분석은 실제 비행 시각을 고려한 충돌 분석이 아닙니다.
+기체별 성능 승인·바람·지형·건물 장애물·롤 전이는 포함하지 않습니다.</p>
+<h2>재실행</h2><pre>python -B 수정본_20261103/코드/optimization_path.py
+# 간격 목표와 교차 페널티 변경 (기하 후보 캐시는 재사용)
+python -B 수정본_20261103/코드/optimization_path.py --spacing-target 150 --route-cross-weight 2000000
+# 이전 STAR 단독 분석 모드
+python -B 수정본_20261103/코드/optimization_path.py --star-only --reuse-metrics</pre>
+<p>모든 후보 지표: all_star_sid_candidates.csv. 설정·해시·선정 요약: summary.json.
+각 폴더의 vertices.csv에는 Z·속도·시간, route_pair_spacing.csv에는 STAR–STAR, SID–SID,
+STAR–SID 모든 조합의 최소 간격과 교차 여부가 있습니다.</p></html>

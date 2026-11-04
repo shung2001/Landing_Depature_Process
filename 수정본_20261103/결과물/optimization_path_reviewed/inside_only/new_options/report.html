@@ -1,0 +1,45 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>Inner new options</title>
+<style>body{font-family:Malgun Gothic,sans-serif;max-width:1250px;margin:32px auto;line-height:1.7}img{max-width:100%}.note{padding:14px;background:#fff1d5}</style>
+<h1>링 내부: 평면 무교차 우선 / 교차점 수직 이격 대안</h1>
+<p>사용자 확인에 따라 두 조건을 다른 시나리오로 구분했습니다. 교차 금지를 충족하는 안에서는
+교차점의 Z 간격이 정의되지 않습니다. 교차를 허용하는 대안에서는 전체 연결 범위를 유지한 채
+모든 교차점의 최소 |ZA−ZB|를 최대화합니다.</p>
+<p class="note">수직 간격이 크다는 이유만으로 실제 운항 안전성이 입증되는 것은 아닙니다.
+이전의 70m를 하드 기준으로 재적용하지 않았으며, 정해진 수직 분리값을 충족한다고 주장하지 않습니다.
+시각·풍향·기체 운항 성능은 포함하지 않은 기하 분석입니다.</p>
+<p>기존 조건 유지: 링 350m·내부 경계, FAF alt, 70↔60kt, CW RSR, 구배와 뱅크 제한,
+총 선회 180° 형태 필터·자기교차 금지·반대편 FAF의 STAR/SID 배정·기존 Landing_Area 처리.
+수직 간격을 늘리기 위해 원본 고도나 경로의 Z 보간을 임의로 변경하지 않았습니다.</p>
+<h2>우선안: XY 교차 금지</h2><p>FAF 4쌍,
+Approach 4개 / Departure 4개.
+XY 교차 0쌍, 교차점 최소 수직 간격: 교차점 없음.
+Landing_Area 관통 6건.</p>
+<p><a href="no_xy_crossing/Approach_z.shp">Approach SHP</a> · <a href="no_xy_crossing/Departure_z.shp">Departure SHP</a> ·
+<a href="no_xy_crossing/IAF_points_z.shp">IAF 점</a> · <a href="no_xy_crossing/FAF_points_z.shp">FAF 점</a> ·
+<a href="no_xy_crossing/crossing_details.csv">교점별 두 항로 높이 CSV</a></p>
+<img src="no_xy_crossing/map_combined.png"><details><summary>Approach / Departure 개별 지도</summary>
+<img src="no_xy_crossing/map_star.png"><img src="no_xy_crossing/map_sid.png"></details><h2>Landing_Area도 관통 금지</h2><p>FAF 3쌍,
+Approach 3개 / Departure 3개.
+XY 교차 0쌍, 교차점 최소 수직 간격: 교차점 없음.
+Landing_Area 관통 0건.</p>
+<p><a href="strict_no_xy_crossing/Approach_z.shp">Approach SHP</a> · <a href="strict_no_xy_crossing/Departure_z.shp">Departure SHP</a> ·
+<a href="strict_no_xy_crossing/IAF_points_z.shp">IAF 점</a> · <a href="strict_no_xy_crossing/FAF_points_z.shp">FAF 점</a> ·
+<a href="strict_no_xy_crossing/crossing_details.csv">교점별 두 항로 높이 CSV</a></p>
+<img src="strict_no_xy_crossing/map_combined.png"><details><summary>Approach / Departure 개별 지도</summary>
+<img src="strict_no_xy_crossing/map_star.png"><img src="strict_no_xy_crossing/map_sid.png"></details><h2>대안: 전체 연결 + 교차점 수직 간격 최대화</h2><p>FAF 8쌍,
+Approach 8개 / Departure 8개.
+XY 교차 26쌍, 교차점 최소 수직 간격: 13.516m.
+Landing_Area 관통 9건.</p>
+<p><a href="vertical_clearance_alternative/Approach_z.shp">Approach SHP</a> · <a href="vertical_clearance_alternative/Departure_z.shp">Departure SHP</a> ·
+<a href="vertical_clearance_alternative/IAF_points_z.shp">IAF 점</a> · <a href="vertical_clearance_alternative/FAF_points_z.shp">FAF 점</a> ·
+<a href="vertical_clearance_alternative/crossing_details.csv">교점별 두 항로 높이 CSV</a></p>
+<img src="vertical_clearance_alternative/map_combined.png"><details><summary>Approach / Departure 개별 지도</summary>
+<img src="vertical_clearance_alternative/map_star.png"><img src="vertical_clearance_alternative/map_sid.png"></details><img src="vertical_clearance_alternative/crossing_z_spacing.png"><img src="vertical_clearance_alternative/crossing_vertical_links.png">
+<h2>교점 높이 계산</h2><p>두 항로의 XY 교점을 구한 뒤, 각 항로의 원본 XYZ에서 독립적으로 높이를 보간합니다.
+교점이 여러 개면 가장 작은 간격을 사용합니다. XY 중첩 구간은 두 항로의 모든 꺾임점을 포함해
+높이 차가 0이 되는 위치까지 검사합니다. Shapely가 교점 기하에 넣는 혼합 Z는 사용하지 않습니다.</p>
+<p>crossing_points_z.shp의 기하 Z는 표시용 중간 높이이며 z_a/z_b가 실제 항로 높이입니다.
+crossing_levels_z.shp는 같은 XY에 각 항로의 실제 높이 점 두 개를 저장합니다.</p>
+<p>최적성은 저장된 선별 후보 안의 의미입니다. 전체 연속 경로나 모든 원자료 후보 조합의 전역 최적성은
+주장하지 않습니다. 시간 제한은 불가능성 증명으로 해석하지 않습니다.</p>
+<h2>재실행</h2><pre>python -B 수정본_20261103/코드/optimization_path.py --inside-new-options</pre></html>

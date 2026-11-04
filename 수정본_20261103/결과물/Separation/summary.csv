@@ -1,0 +1,4 @@
+﻿group,a_route_parts,b_route_parts,intersection_evaluations,intersecting_route_pairs,shared_endpoint_evaluations,non_shared_endpoint_evaluations,overlap_evaluations,minimum_all_m,minimum_non_shared_m,maximum_all_m
+Short_Final_internal,16,16,16,16,8,8,0,0.000000000,0.251352929,50.887045104
+Vertical_routes_internal,16,16,27,26,0,27,0,13.515732908,13.515732908,94.170314786
+Short_Final_vs_vertical_routes,16,16,22,22,16,6,0,0.000000000,55.709507543,183.706173343

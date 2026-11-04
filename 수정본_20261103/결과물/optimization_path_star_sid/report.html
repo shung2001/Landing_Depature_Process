@@ -1,0 +1,561 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>STAR/SID 항로 비교</title>
+<style>body{font-family:Malgun Gothic,sans-serif;max-width:1300px;margin:32px auto;line-height:1.7}img{max-width:100%}table{border-collapse:collapse}td,th{padding:5px;border:1px solid #ccc}.note{background:#fff2d8;padding:16px}</style>
+<h1>Inner Ring STAR / 반대편 FAF SID 공동 선정</h1>
+<p class="note">형태 수정 검토 중: FAF 부근의 큰 원형 선회가 포함된 기존 기하 후보입니다. 현재 SHP 분리는 완료했으며 항로 모양은 아직 변경하지 않았습니다. 이 결과를 최종 Approach/Departure 설계안으로 해석하지 마세요.</p>
+<p>쌍마다 STAR 하나와 반대편 FAF의 SID 하나를 함께 선정합니다. STAR는 링→FAF, SID는 FAF→링으로
+각각 새 시계방향 RSR을 계산합니다. SID를 STAR의 좌표 역순으로 만들지 않습니다.</p>
+<p>링 350m, STAR 70→60kt,
+SID 60→70kt. 상승·하강 모두
+2.36°와 250ft/NM 중 엄격한 제한 적용.
+뱅크 ≤30°. 속도는 무풍 TAS로 가정하고 FAF alt를 사용합니다.</p>
+<p class="note">항로 간 거리는 전체 중심선의 XY 최소 거리이며 끝점도 포함합니다.
+고정된 16개 FAF의 최소 간격이 77.15m라서 모든 항로 간격을
+100m 이상으로 만드는 것은 불가능할 수 있습니다.
+간격 목표는 연성 조건이고, 항로 교차를 강하게 벌점 처리합니다. 수직 분리로 XY 교차를 면제하지 않습니다.</p>
+<p>inside_only는 원호와 직선의 해석적 최대 반경을 검사하여 링 밖으로 나가지 못하게 합니다.
+outside_allowed는 동일 후보에 링 밖 우회를 추가로 허용합니다.
+outside_detour는 각 항로가 링 반경보다 1m 이상 벗어나는 후보만 사용하는 추가 비교안입니다.
+이전 STAR 단독 결과는 그대로 보존합니다.</p>
+<h2>링 내부 제한</h2><p>STAR 8개 / SID 8개.
+항로 교차 4쌍, 최소 XY 간격 0.00m,
+길이 합 43.13km, 링 밖 우회 0개.
+Landing_Area 관통 34건 (penalized).</p>
+<p>선정하지 못한 쌍: []. 후보 수 77,020, 조합 탐색용 후보 2,357.</p>
+<p>교차 0건 추가 탐색: time_limit_no_zero_crossing_incumbent.
+시간 제한으로 해를 찾지 못한 경우 교차 없는 해가 존재하지 않는다는 뜻은 아닙니다.</p>
+<p><a href="inside_only/Approach_z.shp">Approach 전용 SHP</a> ·
+<a href="inside_only/Departure_z.shp">Departure 전용 SHP</a> ·
+<a href="inside_only/route_pair_spacing.csv">항로 간격·교차 CSV</a></p>
+<details><summary>통합 비교 지도 (Approach와 Departure SHP는 별도)</summary><img src="inside_only/map_combined.png"></details>
+<h3>Approach</h3><img src="inside_only/map_star.png"><h3>Departure</h3><img src="inside_only/map_sid.png">
+<details><summary>3D / 고도 / 선정 표</summary><img src="inside_only/view3d.png"><img src="inside_only/profiles.png"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>operation</th>
+      <th>pair</th>
+      <th>faf_id</th>
+      <th>iaf_id</th>
+      <th>length_m</th>
+      <th>slope_deg</th>
+      <th>bank_deg</th>
+      <th>outside_m</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STAR</td>
+      <td>1</td>
+      <td>11</td>
+      <td>657</td>
+      <td>3996.09</td>
+      <td>1.95</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>1</td>
+      <td>12</td>
+      <td>515</td>
+      <td>4281.18</td>
+      <td>1.82</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>2</td>
+      <td>8</td>
+      <td>976</td>
+      <td>3390.51</td>
+      <td>1.91</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>2</td>
+      <td>7</td>
+      <td>625</td>
+      <td>3465.83</td>
+      <td>1.87</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>3</td>
+      <td>9</td>
+      <td>866</td>
+      <td>2957.26</td>
+      <td>2.35</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>3</td>
+      <td>10</td>
+      <td>976</td>
+      <td>2954.25</td>
+      <td>2.36</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>4</td>
+      <td>14</td>
+      <td>42</td>
+      <td>2125.39</td>
+      <td>2.36</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>4</td>
+      <td>13</td>
+      <td>934</td>
+      <td>2208.54</td>
+      <td>2.27</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>5</td>
+      <td>1</td>
+      <td>383</td>
+      <td>2251.84</td>
+      <td>1.73</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>5</td>
+      <td>2</td>
+      <td>958</td>
+      <td>1717.18</td>
+      <td>2.27</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>6</td>
+      <td>4</td>
+      <td>11</td>
+      <td>1785.37</td>
+      <td>2.15</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>6</td>
+      <td>3</td>
+      <td>586</td>
+      <td>2684.13</td>
+      <td>1.43</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>7</td>
+      <td>16</td>
+      <td>181</td>
+      <td>1172.66</td>
+      <td>2.33</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>7</td>
+      <td>15</td>
+      <td>569</td>
+      <td>1165.28</td>
+      <td>2.35</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>8</td>
+      <td>5</td>
+      <td>309</td>
+      <td>2949.75</td>
+      <td>2.26</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>8</td>
+      <td>6</td>
+      <td>585</td>
+      <td>4026.95</td>
+      <td>1.66</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+  </tbody>
+</table></details><h2>링 밖 우회 허용</h2><p>STAR 8개 / SID 8개.
+항로 교차 2쌍, 최소 XY 간격 0.00m,
+길이 합 44.56km, 링 밖 우회 6개.
+Landing_Area 관통 18건 (penalized).</p>
+<p>선정하지 못한 쌍: []. 후보 수 111,466, 조합 탐색용 후보 2,538.</p>
+<p>교차 0건 추가 탐색: time_limit_no_zero_crossing_incumbent.
+시간 제한으로 해를 찾지 못한 경우 교차 없는 해가 존재하지 않는다는 뜻은 아닙니다.</p>
+<p><a href="outside_allowed/Approach_z.shp">Approach 전용 SHP</a> ·
+<a href="outside_allowed/Departure_z.shp">Departure 전용 SHP</a> ·
+<a href="outside_allowed/route_pair_spacing.csv">항로 간격·교차 CSV</a></p>
+<details><summary>통합 비교 지도 (Approach와 Departure SHP는 별도)</summary><img src="outside_allowed/map_combined.png"></details>
+<h3>Approach</h3><img src="outside_allowed/map_star.png"><h3>Departure</h3><img src="outside_allowed/map_sid.png">
+<details><summary>3D / 고도 / 선정 표</summary><img src="outside_allowed/view3d.png"><img src="outside_allowed/profiles.png"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>operation</th>
+      <th>pair</th>
+      <th>faf_id</th>
+      <th>iaf_id</th>
+      <th>length_m</th>
+      <th>slope_deg</th>
+      <th>bank_deg</th>
+      <th>outside_m</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STAR</td>
+      <td>1</td>
+      <td>12</td>
+      <td>818</td>
+      <td>3775.38</td>
+      <td>2.06</td>
+      <td>10.00</td>
+      <td>2754.79</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>1</td>
+      <td>11</td>
+      <td>937</td>
+      <td>3722.31</td>
+      <td>2.09</td>
+      <td>14.81</td>
+      <td>1485.13</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>2</td>
+      <td>8</td>
+      <td>797</td>
+      <td>2976.66</td>
+      <td>2.18</td>
+      <td>14.81</td>
+      <td>35.42</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>2</td>
+      <td>7</td>
+      <td>625</td>
+      <td>3465.83</td>
+      <td>1.87</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>3</td>
+      <td>9</td>
+      <td>556</td>
+      <td>2963.28</td>
+      <td>2.35</td>
+      <td>10.00</td>
+      <td>2376.66</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>3</td>
+      <td>10</td>
+      <td>731</td>
+      <td>3409.32</td>
+      <td>2.04</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>4</td>
+      <td>13</td>
+      <td>85</td>
+      <td>3656.67</td>
+      <td>1.37</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>4</td>
+      <td>14</td>
+      <td>127</td>
+      <td>2822.38</td>
+      <td>1.77</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>5</td>
+      <td>2</td>
+      <td>1000</td>
+      <td>3069.99</td>
+      <td>1.27</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>5</td>
+      <td>1</td>
+      <td>418</td>
+      <td>2247.98</td>
+      <td>1.73</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>6</td>
+      <td>3</td>
+      <td>463</td>
+      <td>1628.78</td>
+      <td>2.35</td>
+      <td>14.81</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>6</td>
+      <td>4</td>
+      <td>265</td>
+      <td>1628.29</td>
+      <td>2.35</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>7</td>
+      <td>15</td>
+      <td>438</td>
+      <td>1206.31</td>
+      <td>2.27</td>
+      <td>20.70</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>7</td>
+      <td>16</td>
+      <td>278</td>
+      <td>2035.41</td>
+      <td>1.34</td>
+      <td>30.00</td>
+      <td>0.00</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>8</td>
+      <td>5</td>
+      <td>135</td>
+      <td>3032.31</td>
+      <td>2.20</td>
+      <td>14.81</td>
+      <td>979.19</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>8</td>
+      <td>6</td>
+      <td>181</td>
+      <td>2917.19</td>
+      <td>2.29</td>
+      <td>10.00</td>
+      <td>1517.07</td>
+    </tr>
+  </tbody>
+</table></details><h2>링 밖 우회 필수</h2><p>STAR 6개 / SID 6개.
+항로 교차 7쌍, 최소 XY 간격 0.00m,
+길이 합 38.66km, 링 밖 우회 12개.
+Landing_Area 관통 7건 (penalized).</p>
+<p>선정하지 못한 쌍: [4, 5]. 후보 수 33,563, 조합 탐색용 후보 1,677.</p>
+<p>교차 0건 추가 탐색: time_limit_no_zero_crossing_incumbent.
+시간 제한으로 해를 찾지 못한 경우 교차 없는 해가 존재하지 않는다는 뜻은 아닙니다.</p>
+<p><a href="outside_detour/Approach_z.shp">Approach 전용 SHP</a> ·
+<a href="outside_detour/Departure_z.shp">Departure 전용 SHP</a> ·
+<a href="outside_detour/route_pair_spacing.csv">항로 간격·교차 CSV</a></p>
+<details><summary>통합 비교 지도 (Approach와 Departure SHP는 별도)</summary><img src="outside_detour/map_combined.png"></details>
+<h3>Approach</h3><img src="outside_detour/map_star.png"><h3>Departure</h3><img src="outside_detour/map_sid.png">
+<details><summary>3D / 고도 / 선정 표</summary><img src="outside_detour/view3d.png"><img src="outside_detour/profiles.png"><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>operation</th>
+      <th>pair</th>
+      <th>faf_id</th>
+      <th>iaf_id</th>
+      <th>length_m</th>
+      <th>slope_deg</th>
+      <th>bank_deg</th>
+      <th>outside_m</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>STAR</td>
+      <td>1</td>
+      <td>12</td>
+      <td>818</td>
+      <td>3775.38</td>
+      <td>2.06</td>
+      <td>10.00</td>
+      <td>2754.79</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>1</td>
+      <td>11</td>
+      <td>770</td>
+      <td>3487.28</td>
+      <td>2.23</td>
+      <td>20.70</td>
+      <td>726.66</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>2</td>
+      <td>8</td>
+      <td>795</td>
+      <td>3802.27</td>
+      <td>1.71</td>
+      <td>10.00</td>
+      <td>2684.77</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>2</td>
+      <td>7</td>
+      <td>805</td>
+      <td>3663.45</td>
+      <td>1.77</td>
+      <td>10.00</td>
+      <td>2662.80</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>3</td>
+      <td>10</td>
+      <td>870</td>
+      <td>3597.09</td>
+      <td>1.93</td>
+      <td>20.70</td>
+      <td>823.36</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>3</td>
+      <td>9</td>
+      <td>583</td>
+      <td>3680.60</td>
+      <td>1.89</td>
+      <td>30.00</td>
+      <td>518.18</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>6</td>
+      <td>3</td>
+      <td>421</td>
+      <td>2345.00</td>
+      <td>1.64</td>
+      <td>10.00</td>
+      <td>862.63</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>6</td>
+      <td>4</td>
+      <td>332</td>
+      <td>3044.27</td>
+      <td>1.26</td>
+      <td>10.00</td>
+      <td>1848.79</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>7</td>
+      <td>15</td>
+      <td>375</td>
+      <td>2175.49</td>
+      <td>1.26</td>
+      <td>14.81</td>
+      <td>434.82</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>7</td>
+      <td>16</td>
+      <td>291</td>
+      <td>2975.74</td>
+      <td>0.92</td>
+      <td>20.70</td>
+      <td>398.48</td>
+    </tr>
+    <tr>
+      <td>STAR</td>
+      <td>8</td>
+      <td>5</td>
+      <td>121</td>
+      <td>3196.10</td>
+      <td>2.09</td>
+      <td>14.81</td>
+      <td>960.21</td>
+    </tr>
+    <tr>
+      <td>SID</td>
+      <td>8</td>
+      <td>6</td>
+      <td>181</td>
+      <td>2917.19</td>
+      <td>2.29</td>
+      <td>10.00</td>
+      <td>1517.07</td>
+    </tr>
+  </tbody>
+</table></details>
+<h2>선정 방법과 해석</h2><p>먼저 각 시나리오에서 Landing_Area 관통 없는 STAR/SID 쌍 구성이 가능한지 검사합니다.
+8개 쌍을 모두 구성할 수 없을 때만 관통 개수·길이·표면 높이 차 페널티를 적용합니다.
+반경·구배·시계방향·링 내부 경계 같은 기하 조건은 완화하지 않습니다.
+해당 조건으로 구성할 수 없는 쌍은 보고서와 JSON에 누락으로 명시합니다.</p>
+<p>개별 후보 전수 평가 후, 각 운항방향·FAF의 점수 상위 후보와 링 구간별 분산 후보를 모아
+STAR/SID 쌍 단위 다중 시작 좌표하강법으로 공동 선정합니다. 교차 쌍 수, 최소 간격 부족,
+전체 항로 쌍의 간격 부족, 노드 집중, 항로 길이·뱅크각이 목적함수에 들어갑니다.
+전체 후보 조합의 전역 최적성이나 ‘해가 존재하지 않음’을 증명하지 않습니다.
+교차가 남으면 제한 시간 내 MILP로 교차 없는 조합을 추가로 찾습니다. 이 탐색이 성공하면 교차 0건을 유지하며 간격을 재개선합니다.
+시나리오별 독립 휴리스틱 결과이므로 우회 허용의 수치가 내부 제한보다 항상 우수하다는 보장은 없습니다.</p>
+<p>원호는 최대 0.02m 현 오차로 저장하고, 최종 XY 교차·간격은 원본 해상도의
+저장 폴리라인으로 다시 검사합니다. 간격 분석은 실제 비행 시각을 고려한 충돌 분석이 아닙니다.
+기체별 성능 승인·바람·지형·건물 장애물·롤 전이는 포함하지 않습니다.</p>
+<h2>재실행</h2><pre>python -B 수정본_20261103/코드/optimization_path.py
+# 간격 목표와 교차 페널티 변경 (기하 후보 캐시는 재사용)
+python -B 수정본_20261103/코드/optimization_path.py --spacing-target 150 --route-cross-weight 2000000
+# 이전 STAR 단독 분석 모드
+python -B 수정본_20261103/코드/optimization_path.py --star-only --reuse-metrics</pre>
+<p>모든 후보 지표: all_star_sid_candidates.csv. 설정·해시·선정 요약: summary.json.
+각 폴더의 vertices.csv에는 Z·속도·시간, route_pair_spacing.csv에는 STAR–STAR, SID–SID,
+STAR–SID 모든 조합의 최소 간격과 교차 여부가 있습니다.</p></html>

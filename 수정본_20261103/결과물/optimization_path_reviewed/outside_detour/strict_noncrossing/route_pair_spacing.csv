@@ -1,0 +1,2 @@
+﻿route_a,operation_a,pair_a,route_b,operation_b,pair_b,min_xy_m,intersects,intersection_type,below_target
+1,STAR,6,2,SID,6,1236.0679774998018,False,LineString,False

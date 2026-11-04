@@ -1,0 +1,16 @@
+﻿route_a,operation_a,pair_a,route_b,operation_b,pair_b,min_xy_m,intersects,intersection_type,below_target
+1,STAR,3,2,SID,3,1816.508048927783,False,LineString,False
+1,STAR,3,3,STAR,6,574.2581332117118,False,LineString,False
+1,STAR,3,4,SID,6,2803.4006864529533,False,LineString,False
+1,STAR,3,5,STAR,7,855.2547277006494,False,LineString,False
+1,STAR,3,6,SID,7,2588.223846277814,False,LineString,False
+2,SID,3,3,STAR,6,2224.322862713642,False,LineString,False
+2,SID,3,4,SID,6,219.60389596125836,False,LineString,False
+2,SID,3,5,STAR,7,2636.129699681126,False,LineString,False
+2,SID,3,6,SID,7,981.7792799212442,False,LineString,False
+3,STAR,6,4,SID,6,1992.3914666437208,False,LineString,False
+3,STAR,6,5,STAR,7,198.1878958436852,False,LineString,False
+3,STAR,6,6,SID,7,1600.1165489490313,False,LineString,False
+4,SID,6,5,STAR,7,2092.495841101615,False,LineString,False
+4,SID,6,6,SID,7,217.09409448178846,False,LineString,False
+5,STAR,7,6,SID,7,1236.0679774997695,False,LineString,False

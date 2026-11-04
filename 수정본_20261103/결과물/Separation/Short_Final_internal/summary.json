@@ -1,0 +1,16 @@
+{
+  "group": "Short_Final_internal",
+  "a_route_parts": 16,
+  "b_route_parts": 16,
+  "intersection_evaluations": 16,
+  "intersecting_route_pairs": 16,
+  "shared_endpoint_evaluations": 8,
+  "non_shared_endpoint_evaluations": 8,
+  "overlap_evaluations": 0,
+  "minimum_all_m": 0.0,
+  "minimum_non_shared_m": 0.25135292945540755,
+  "maximum_all_m": 50.887045103630754,
+  "height_png_pages": [
+    "crossing_heights_01.png"
+  ]
+}
