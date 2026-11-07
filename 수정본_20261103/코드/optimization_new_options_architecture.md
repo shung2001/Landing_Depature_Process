@@ -1,5 +1,101 @@
 # `optimization_new_options.py` 아키텍처
 
+## 먼저 읽는 핵심 요약
+
+**기존에 검토한 링 내부 후보에서 STAR(접근)와 SID(출발)를 공동 선정하는 코드다.** FAF 쌍 하나를 연결하면 STAR 1개와 SID 1개를 선택하며 서로 반대편 FAF를 사용한다. 실제 선정·penalty 계산은 공통 모듈 `optimization_path.py`에 있고, 이 모듈은 시나리오 실행과 교점 높이 계산을 담당한다.
+
+### 알고리즘과 선정 우선순위
+
+| 시나리오 | 선정 순서 | 강제 조건 |
+|---|---|---|
+| `no_xy_crossing` | MILP로 연결 FAF 쌍 수 최대화 → 연결 수를 유지하며 최소 XY 간격 확대 → 비용 개선 | XY 교차 금지. 일부 FAF 쌍은 제외될 수 있음 |
+| `strict_no_xy_crossing` | Landing_Area 무관통 가능한 쌍에 한정하여 위 절차 수행 | XY 교차·Landing_Area 관통 모두 금지 |
+| `vertical_clearance_alternative` | 전체 연결 초기해 생성 → 연결 수를 고정하여 최악 교점의 절대 Z 차 최대화 → 확보한 Z 하한을 유지하며 비용 개선 | 연결 가능한 모든 FAF 쌍 유지. XY 교차 허용 |
+
+MILP는 후보와 FAF 쌍의 선택 여부를 이진 변수로 표현한다. 간격 확대는 목표 간격의 실현 가능성을 MILP로 질의하며 상·하한을 좁히는 방식이다. 마지막 비용 개선은 **다중 시작점 블록 좌표하강**이다. 다른 쌍을 고정하고 한 FAF 쌍의 배정 방향과 STAR×SID 후보 조합을 비교해 비용을 줄인다. 이 단계는 휴리스틱이다.[^milp-model][^vertical-search][^conditional-conflicts]
+
+### 후보를 남기는 방식
+
+1. 이전 실행의 설정과 후보 CSV를 읽고 원본 입력 해시를 확인한다.
+2. 형상 조건과 링 내부 조건을 만족하는 후보를 남긴다.
+3. **FAF 쌍별로** Landing_Area 무관통 배정이 가능하면 무관통 후보만 사용한다. 불가능한 쌍에만 관통 후보와 penalty를 허용한다.
+4. 운항 종류·FAF별 `score` 상위 후보를 기본 36개 남기고, 링의 기본 24개 각도 구역별 상위 2개를 추가한 뒤 중복을 제거한다. 따라서 후보 수가 정확히 36개인 것은 아니다.
+5. 이 유한 후보 집합에서 시나리오별 선정과 최종 기하 검증을 수행한다.[^bootstrap][^pool]
+
+### penalty의 핵심
+
+**하드 제약은 위반 조합을 배제하고, penalty는 허용된 조합의 비용을 높인다.** 비용은 개별 항로의 길이·뱅크각·Landing_Area 관련 `score`와, 네트워크의 항로 간 교차·간격 부족·IAF 집중 비용으로 나뉜다.
+
+수직 대안은 Z 차를 가중 penalty로 합산하지 않는다. **교점의 최소 절대 Z 차를 직접 최대화한 뒤, 확보한 값을 후처리의 하한 제약으로 사용한다.** 후처리에서도 허용된 XY 교차에는 교차 penalty가 남는다. 고정 70m 수직 분리 기준은 적용하지 않으며 `--z-tolerance 0.5`는 탐색 종료 오차다.[^vertical-branch][^model-scope]
+
+## penalty와 목적함수 상세
+
+### 개별 항로 점수
+
+기존 CSV의 `score`는 공통 코드의 후보 생성 단계에서 아래와 같이 계산되며, 새 대안 모듈은 저장된 점수를 읽어 사용한다.
+
+```text
+score_i = length_weight × length_m / 1000
+        + bank_weight × bank_deg / max_bank
+        + crossing_weight × cross_n
+        + overlap_weight × overlap_m
+        + clearance_weight × Σ_a exp(-g_ia / clearance_scale_m)
+```
+
+`cross_n`은 양의 길이로 겹치는 Landing_Area 개수, `overlap_m`은 중첩 XY 길이 합이다. `g_ia`는 중첩 구간에서 항로와 해당 Landing_Area 평면 사이의 최소 절대 높이 차(m)다. 점 접촉은 관통으로 세지 않으며 자기 FAF의 Landing_Area도 양의 길이로 겹치면 평가한다. 높이 차가 작을수록 비용이 커진다. **이 높이 차는 항로와 Landing_Area 사이의 값으로, 두 항로의 교점 Z 차와 다르다.** 근거는 공통 코드의 `landing_metrics()`와 `score` 계산부다.
+
+| 설정 | 코드 기본값 | 의미 |
+|---|---:|---|
+| `length_weight` | 1 | 항로 1km당 비용 |
+| `bank_weight` | 1 | 최대 허용 뱅크각 대비 비율의 비용 |
+| `crossing_weight` | 10,000 | Landing_Area 하나 관통당 비용 |
+| `overlap_weight` | 10 | 중첩 1m당 비용 |
+| `clearance_weight` | 50,000 | 영역별 수직 근접 비용 가중치 |
+| `clearance_scale_m` | 100m | 높이 차 비용의 감쇠 척도 |
+
+예를 들어 한 영역과 20m 겹치고 최소 높이 차가 100m이면 관련 비용은 `10,000 + 10×20 + 50,000×exp(-1) ≈ 28,593.97`이며 길이·뱅크 비용이 추가된다. 관통 허용 여부는 앞선 후보 필터가 별도로 결정한다.
+
+### 네트워크 공동 선정 비용
+
+선정 집합을 S, 항로 간 최소 XY 거리를 d_ij, 링 노드 간 거리를 r_ij, 전체 최소 XY 거리를 d_min이라 하면 `traffic_select()`는 다음 비용을 줄인다. 항로 쌍은 한 번씩만 합산한다.[^conditional-conflicts]
+
+```text
+h(d) = max(0, 1 - d / spacing_target_m)^2
+J(S) = Σ_i score_i
+     + Σ_(i<j) [route_cross_weight × XY교차여부_ij
+                 + pair_gap_weight × h(d_ij)
+                 + node_weight × exp(-(r_ij / node_neighborhood_m)^2)]
+     + minimum_gap_weight × h(d_min)
+```
+
+| 설정 | 코드 기본값 | 의미 |
+|---|---:|---|
+| `route_cross_weight` | 1,000,000 | XY에서 만나는 항로 쌍마다 부과. 접촉·중첩 포함 |
+| `spacing_target_m` | 100m | XY 간격의 소프트 목표 |
+| `pair_gap_weight` | 200 | 각 항로 쌍의 간격 부족 비용 |
+| `minimum_gap_weight` | 5,000 | 전체 최소 간격 부족에 추가 비용 |
+| `node_weight` | 20 | 링 노드 집중 비용 |
+| `node_neighborhood_m` | 250m | 노드 집중 비용의 감쇠 척도 |
+
+거리 50m이면 `h=0.25`이므로 해당 쌍의 부족 비용은 50이다. 전체 최소 거리도 50m이면 1,250이 한 번 더 붙는다. 100m 이상에서는 간격 부족 비용이 0이다. 교차 쌍은 거리도 0이므로 교차 비용과 간격 부족 비용이 함께 붙는다. 동일 IAF에서는 노드 집중 비용이 20이다.
+
+**표는 클래스 기본값이며 실제 실행값은 이전 `summary.json`의 `config`·`traffic_config`를 복원한다.**
+
+### MILP 목적과 비용 개선의 차이
+
+`traffic_noncrossing_subset()`은 위 네트워크 비용 전체를 최소화하지 않는다. 후보 선택 x_i와 FAF 쌍 선택 y_p에 대해 아래 목적을 최소화한다.[^milp-model]
+
+```text
+Σ_i [0.0001 × score_i / max(max_i(abs(score_i)), 1)] × x_i
+- 1000 × Σ_p y_p
+```
+
+연결 수 보상에 비해 후보 점수 계수를 매우 작게 둔다. `required_pairs`가 지정되면 연결 수를 등식으로 고정한다. 금지 조합은 `x_i+x_j≤1`로 제한한다. 따라서 **연결 수 확보 → 간격 개선 → 제약을 유지하며 네트워크 비용 개선**이라는 단계별 목적을 구분해야 한다. 시간 제한으로 해를 못 찾은 경우는 불가능의 증명으로 취급하지 않는다. 최적성의 범위는 저장된 유한 후보 집합이다.
+
+---
+
+이하에서는 입력·함수 구조, 높이 보간, 행렬·캐시, 시나리오별 탐색, 출력과 검증을 상세히 설명한다.
+
 ## 1. 문서의 범위와 근거
 
 이 문서는 **현재 구현의 구조와 동작**을 설명한다. 대상 모듈은 기존 검토 후보에서 링 내부 항로를 재선정하고, **XY 무교차 우선안**과 **XY 교차를 허용하되 교점의 최소 수직 간격을 키운 대안**을 분리해 내보낸다. 새로운 Dubins 후보를 전수 생성하는 모듈은 아니다.[^scope][^bootstrap]
